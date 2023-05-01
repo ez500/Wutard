@@ -5,8 +5,10 @@ from discord.ext import tasks
 import asyncio
 import pathlib as pl
 
+
 with open('client.token', 'r') as f:
     token = f.readline().strip()
+
 
 client = commands.Bot(command_prefix='super ', help_command=None, intents=discord.Intents.all())
 
@@ -17,26 +19,38 @@ async def on_ready():
     print('Logged in')
 
 
-async def main():
-    await client.start(token)
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+    if message.author.bot:
+        return
 
 
-@client.command()
+    await client.process_commands(message)
+
+
+@client.command(name='help', description='ask for help')
 async def help(ctx):
     await ctx.send('Sorry, I can\'t help you. Ah, that\'s life. I think <@377907768071553024> over there can though.')
 
 
-@client.command()
+@client.command(name='leave', description='leave', aliases=['closeofbusiness'])
 async def closeofbusiness(ctx):
     await ctx.send('Take care!')
 
 
-@client.command()
+@client.command(name='start', description='start class', aliases=['startofclass'])
 async def startofclass(ctx):
     await ctx.send('It is a super day! Ah, that’s life. Who’s ready for the bell ringer? I surely am. It’s a three! '
                    'Who got A? Who got B? Who got C? Cs get degrees. Ah, super. '
                    'The answer at the back of the book is C. Alright! Lecture time. Unit 10 iteration! '
                    'But first, better today than yesterday!')
+
+
+async def main():
+    await client.start(token)
+
 
 if __name__ == '__main__':
     asyncio.run(main())
