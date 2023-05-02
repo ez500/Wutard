@@ -53,7 +53,7 @@ async def startofclass(ctx):
 @tasks.loop(minutes=2)
 async def super_every_two_minutes():
     await client.wait_until_ready()
-    await client.get_channel(920164893162897429).send('Ah, super!')
+    await client.get_channel(1013977098370699305).send('Ah, super!')
 
 
 async def main():
