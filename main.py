@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord.ext import tasks
 
+import random
 import asyncio
 import pathlib as pl
 
@@ -25,7 +26,8 @@ async def on_message(message):
         return
     if message.author.bot:
         return
-
+    if random.randint(0, 1) == 0:
+        await message.channel.send('Ah, super!')
 
     await client.process_commands(message)
 
@@ -48,7 +50,14 @@ async def startofclass(ctx):
                    'But first, better today than yesterday!')
 
 
+@tasks.loop(minutes=2)
+async def super_every_two_minutes():
+    await client.wait_until_ready()
+    await client.get_channel(920164893162897429).send('Ah, super!')
+
+
 async def main():
+    super_every_two_minutes.start()
     await client.start(token)
 
 
