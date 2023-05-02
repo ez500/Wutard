@@ -34,7 +34,7 @@ async def on_message(message):
 
 @client.command(name='help', description='ask for help')
 async def help(ctx):
-    await ctx.send('Sorry, I can\'t help you. Ah, that\'s life. I think <@377907768071553024> over there can though.')
+    await ctx.send('Sorry, I can\'t help you. Ah, that\'s life. I think <@377907768071553024> over there can though.', allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=False))
 
 
 @client.command(name='leave', description='leave', aliases=['closeofbusiness'])
