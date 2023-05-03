@@ -39,7 +39,19 @@ async def on_message(message: Message):
         return
     if message.author.bot:
         return
-    if random.randint(0, 1) == 0:
+    if message.content.__contains__(client.user.mention):
+        try:
+            await message.channel.send(f'Ah, {message.author.mention}, hello! Hey there! How are you?')
+
+            def check(m):
+                return m.channel == message.channel and m.author == message.author
+
+            msg = await client.wait_for('message', check=check, timeout=20.0)
+            await message.channel.send('Yes,')
+        except asyncio.exceptions.TimeoutError:
+            await message.channel.send('Ah, you ignored me. That\'s life!')
+
+    elif random.randint(0, 1) == 0:
         await message.channel.send('Ah, super!')
 
     await client.process_commands(message)
