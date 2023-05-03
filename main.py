@@ -1,4 +1,5 @@
 import discord
+from discord import Guild, Message
 from discord.ext import commands
 from discord.ext import tasks
 
@@ -21,7 +22,19 @@ async def on_ready():
 
 
 @client.event
-async def on_message(message):
+async def on_guild_join(guild: Guild):
+    channels = guild.channels
+    for c in channels:
+        if c.type == discord.ChannelType.text:
+            channel = c.id
+            await client.get_channel(channel).send('Hello! How\'s it goin\'? I\'m Mr. Woodard, and I am your computer '
+                                                   'teacher. As the year begins, I lecture a lot, and as it goes on, I '
+                                                   'lecture a little. Everyone ready for the bell ringer? Ah, super!')
+            break
+
+
+@client.event
+async def on_message(message: Message):
     if message.author == client.user:
         return
     if message.author.bot:
