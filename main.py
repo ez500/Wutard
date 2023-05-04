@@ -4,6 +4,7 @@ from discord.ext import commands
 from discord.ext import tasks
 
 import random
+import datetime
 import asyncio
 import pathlib as pl
 
@@ -75,7 +76,7 @@ async def startofclass(ctx):
                    'But first, better today than yesterday!')
 
 
-@tasks.loop(minutes=2)
+@tasks.loop(time=datetime.time(hour=18, minute=30))
 async def super_every_two_minutes():
     await client.wait_until_ready()
     await client.get_channel(1013977098370699305).send('Ah, super!')
