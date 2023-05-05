@@ -1,5 +1,4 @@
 import discord
-from discord import Guild, Message
 from discord.ext import commands
 from discord.ext import tasks
 
@@ -23,7 +22,7 @@ async def on_ready():
 
 
 @client.event
-async def on_guild_join(guild: Guild):
+async def on_guild_join(guild):
     channels = guild.channels
     for c in channels:
         if c.type == discord.ChannelType.text:
@@ -35,22 +34,21 @@ async def on_guild_join(guild: Guild):
 
 
 @client.event
-async def on_message(message: Message):
+async def on_message(message):
     if message.author == client.user:
         return
     if message.author.bot:
         return
-    if message.content.__contains__(client.user.mention):
+
+
+    if client.user.mention in message.content:
         try:
             await message.channel.send(f'Ah, {message.author.mention}, hello! Hey there! How are you?')
-
-            def check(m):
-                return m.channel == message.channel and m.author == message.author
-
-            msg = await client.wait_for('message', check=check, timeout=20.0)
+            msg = await client.wait_for('message', check=lambda m: m.channel == message.channel and m.author == message.author, timeout=20.0)
             await message.channel.send('Yes,')
         except asyncio.exceptions.TimeoutError:
             await message.channel.send('Ah, you ignored me. That\'s life!')
+
 
     elif random.randint(0, 1) == 0:
         await message.channel.send('Ah, super!')
