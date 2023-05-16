@@ -5,7 +5,6 @@ from discord.ext import tasks
 import random
 import datetime
 import asyncio
-import pathlib as pl
 
 
 with open('client.token', 'r') as f:
@@ -40,25 +39,30 @@ async def on_message(message):
     if message.author.bot:
         return
 
-
     if client.user.mention in message.content:
         try:
             await message.channel.send(f'Ah, {message.author.mention}, hello! Hey there! How are you?')
-            msg = await client.wait_for('message', check=lambda m: m.channel == message.channel and m.author == message.author, timeout=20.0)
+            await client.wait_for('message',
+                                  check=lambda m: m.channel == message.channel and m.author == message.author,
+                                  timeout=20.0)
             await message.channel.send('Yes,')
         except asyncio.exceptions.TimeoutError:
             await message.channel.send('Ah, you ignored me. That\'s life!')
 
-
-    elif random.randint(0, 1) == 0:
-        await message.channel.send('Ah, super!')
+    elif random.randint(0, 19) == 0:
+        if message.channel != 1013977098370699305:
+            if random.randint(0, 5) == 0:
+                await message.channel.send('Ah, super!')
+        else:
+            await message.channel.send('Ah, super!')
 
     await client.process_commands(message)
 
 
 @client.command(name='help', description='ask for help')
 async def help(ctx):
-    await ctx.send('Sorry, I can\'t help you. Ah, that\'s life. I think <@377907768071553024> over there can though.', allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=False))
+    await ctx.send('Sorry, I can\'t help you. Ah, that\'s life. I think <@377907768071553024> over there can though.',
+                   allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=False))
 
 
 @client.command(name='leave', description='leave', aliases=['closeofbusiness'])
