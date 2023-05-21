@@ -49,7 +49,7 @@ async def on_message(message):
         except asyncio.exceptions.TimeoutError:
             await message.channel.send('Ah, you ignored me. That\'s life!')
 
-    if 'super' in message.content.lower():
+    if message.content.lower() == 'super':
         await message.channel.send('Ah, super!')
 
     elif random.randint(0, 19) == 0:
@@ -102,19 +102,24 @@ async def startofclass(ctx):
 
 @client.command(name='dice', description='roll dice', aliases=['rollthedice'])
 async def rollthedice(ctx):
-    message = f'Everyone ready for the bell ringer? Time to roll the dice! It\'s a {random.randint(1, 6)}! Who got A? '
-    index = random.randint(1, 5)
-    answers = ['A', 'B', 'C', 'D', 'E']
-    answer = ['Benchmarking', 'Crowd-sourcing', 'The back of the book', 'The textbook', 'CodeHS']
-    if index > 1:
+    dice = random.randint(1, 6)
+    if dice == 1:
+        message = f'Everyone ready for the bell ringer? Time to roll the dice! It\'s a {dice}! Turn \'em in!' \
+                  f' I will rip them out of your hands now. Who got A? '
+    else:
+        message = f'Everyone ready for the bell ringer? Time to roll the dice! It\'s a {dice}! Who got A? '
+    ans = random.randint(1, 5)
+    letters = ['A', 'B', 'C', 'D', 'E']
+    source = ['Benchmarking', 'Crowd-sourcing', 'The back of the book', 'The textbook', 'CodeHS']
+    if ans > 1:
         message += 'Who got B? '
-    if index > 2:
+    if ans > 2:
         message += 'Who got C? '
-    if index > 3:
+    if ans > 3:
         message += 'Who got D? '
-    if index > 4:
+    if ans > 4:
         message += 'Who got E? '
-    message += f'{random.choice(answer)} says the answer is {answers[index - 1]}! '
+    message += f'{random.choice(source)} says the answer is {letters[ans - 1]}! '
     message += 'Super!'
     await ctx.send(message)
 
