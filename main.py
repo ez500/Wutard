@@ -70,12 +70,65 @@ async def closeofbusiness(ctx):
     await ctx.send('Take care!')
 
 
-@client.command(name='start', description='start class', aliases=['startofclass'])
+@client.command(name='start', description='start class', aliases=['startofdice'])
 async def startofclass(ctx):
-    await ctx.send('It is a super day! Ah, that’s life. Who’s ready for the bell ringer? I surely am. It’s a three! '
-                   'Who got A? Who got B? Who got C? Cs get degrees. Ah, super. '
-                   'The answer at the back of the book is C. Alright! Lecture time. Unit 10 iteration! '
-                   'But first, better today than yesterday!')
+    if random.randint(0, 1) == 0:
+        message = 'Hello! How\'s it going. '
+    else:
+        if datetime.datetime.now().hour < 5:
+            time = 'night'
+        elif datetime.datetime.now().hour < 12:
+            time = 'morning'
+        elif datetime.datetime.now().hour < 18:
+            time = 'afternoon'
+        elif datetime.datetime.now().hour < 21:
+            time = 'evening'
+        else:
+            time = 'night'
+        message = f'Good {time}! '
+    phrases = ['It is a super day! ', 'Ah, that\'s life. ', 'Who\'s ready for the bell ringer? I surely am. ',
+               'How\'s it goin\', ladies? ', 'Ah, super! ', 'Alright! ', 'Go on in and sit down! ']
+    for i in range(random.randint(1, 7)):
+        current = phrases
+        index = random.randint(0, len(current) - 1)
+        message += current[index]
+        del current[index]
+    message = message[0:-1]
+    await ctx.send(message)
+
+
+@client.command(name='dice', description='roll dice', aliases=['rollthedice'])
+async def rollthedice(ctx):
+    message = f'Everyone ready for the bell ringer? Time to roll the dice! It\'s a {random.randint(1, 6)}! Who got A? '
+    index = random.randint(1, 5)
+    answers = ['A', 'B', 'C', 'D', 'E']
+    answer = ['Benchmarking', 'Crowd-sourcing', 'The back of the book', 'The textbook', 'CodeHS']
+    if index > 1:
+        message += 'Who got B? '
+    if index > 2:
+        message += 'Who got C? '
+    if index > 3:
+        message += 'Who got D? '
+    if index > 4:
+        message += 'Who got E? '
+    message += f'{random.choice(answer)} says the answer is {answers[index - 1]}! '
+    message += 'Super!'
+    await ctx.send(message)
+
+
+@client.command(name='lecture', description='it\'s lecture time', aliases=['lecturetime'])
+async def lecturetime(ctx):
+    lectures = ['Unit 1 Primitive Types', 'Unit 2 Using Objects', 'Unit 3 Boolean Expression and if Statements',
+                'Unit 4 Iteration', 'Unit 5 Writing Classes', 'Unit 6 Array', 'Unit 7 ArrayList', 'Unit 8 2DArray',
+                'Unit 9 Inheritance', 'Unit 10 Recursion']
+    lessons = ['What all computer user face?', 'The power to be proactive', 'You if seen this, but are stressed',
+               'Which RDP does being proactive fall under?', '"Hey! Look what Zog do!"', 'How to tame email',
+               'You have a knowledge of time management, but no an understanding', 'Benchmarking successful people',
+               'How to manage files', 'The power of Win-Win', 'Win - Win - Teams', 'Why this is powerful?',
+               'Lack of planning = easy jobs are easy', 'Lack of planning = hard projects get hard']
+    message = f'Alright! Lecture time. {random.choice(lectures)}! But first, better today then yesterday! ' \
+              f'{random.choice(lessons)}'
+    await ctx.send(message)
 
 
 @tasks.loop(time=datetime.time(hour=18, minute=30))
