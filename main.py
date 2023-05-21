@@ -125,7 +125,7 @@ async def lecturetime(ctx):
                'Which RDP does being proactive fall under?', '"Hey! Look what Zog do!"', 'How to tame email',
                'You have a knowledge of time management, but no an understanding', 'Benchmarking successful people',
                'How to manage files', 'The power of Win-Win', 'Win - Win - Teams', 'Why this is powerful?',
-               'Lack of planning = easy jobs are easy', 'Lack of planning = hard projects get hard']
+               'Lack of planning = easy jobs are easy', 'Lack of planning = hard projects get hard', 'ChatGDP!']
     message = f'Alright! Lecture time. {random.choice(lectures)}! But first, better today then yesterday! ' \
               f'{random.choice(lessons)}'
     await ctx.send(message)
