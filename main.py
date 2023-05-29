@@ -7,7 +7,7 @@ import datetime
 import asyncio
 
 
-with open('client.token', 'r') as f:
+with open('client_token', 'r') as f:
     token = f.readline().strip()
 
 
