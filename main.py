@@ -2,9 +2,12 @@ import discord
 from discord.ext import commands
 from discord.ext import tasks
 
+import os
 import random
 import datetime
 import asyncio
+
+from PIL import Image, ImageDraw, ImageFont
 
 
 with open('client_token', 'r') as f:
@@ -137,6 +140,18 @@ async def lecturetime(ctx):
     message = f'Alright! Lecture time. {random.choice(lectures)}! But first, better today then yesterday! ' \
               f'{random.choice(lessons)}'
     await ctx.send(message)
+
+
+@client.command(name='slides', description='create slides')
+async def slides(ctx, *, msg: str):
+    image = Image.open('assets/vapor_trail.png')
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype('assets/verdana.ttf', 75)
+    draw.text((100, 200), msg, fill=(255, 255, 255), font=font)
+    image.save('_slides.png')
+    with open('_slides.png', 'rb') as f:
+        upload_image = discord.File(f, spoiler=False)
+    await ctx.send(file=upload_image)
 
 
 @tasks.loop(time=datetime.time(hour=18, minute=30))
