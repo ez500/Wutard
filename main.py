@@ -130,7 +130,7 @@ async def rollthedice(ctx):
     message += f'{random.choice(source)} says the answer is {letters[ans - 1]}! '
     message += 'Super!'
     if random.randint(0, 5) == 0:
-        message += 'Onguh free free!'
+        message += ' Onguh free free!'
     await ctx.send(message)
 
 
