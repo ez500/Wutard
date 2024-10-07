@@ -59,10 +59,6 @@ async def on_message(message):
     if message.content.lower() == 'super':
         await message.channel.send('Ah, super!')
         return
-    elif message.content.contains('super'):
-        if random.randint(0, 9) == 0:
-            await message.channel.send('Ah, super!')
-        return
     elif random.randint(0, 19) == 0:
         if message.channel != 1013977098370699305:
             if random.randint(0, 5) == 0:
