@@ -151,10 +151,10 @@ async def lecturetime(ctx):
     await ctx.send(message)
 
 
-@client.command(name='chinese', description='ask woodard if he knows anything foreign', aliases=['foreignlanguage'])
+@client.command(name='chinese', description='ask woodard if he knows anything foreign', aliases=['foreignlanguage', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
 async def chinese(ctx):
     ethnicities = ['Chinese', 'Japanese', 'Korean', 'Vietnamese', 'Filipino', 'Indian', 'Thai', 'Indonesian', 'African',
-                   'South American', 'Native American', 'Middle Eastern']
+                   'South American', 'Native American', 'Middle Eastern', 'Muslim', 'Black', 'Hispanic', 'Minority']
     await ctx.send(f'Konichiwa! Yes, I am friends with a lot of {random.choice(ethnicities)} people.')
 
 
