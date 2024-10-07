@@ -41,6 +41,8 @@ async def on_message(message):
         return
     if message.author.bot:
         return
+    if message.author.id == 597056424803303435:
+        message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
 
     if client.user.mention in message.content:
         try:
