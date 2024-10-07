@@ -54,16 +54,18 @@ async def on_message(message):
                 await message.channel.send('Yes,')
             except asyncio.exceptions.TimeoutError:
                 await message.channel.send('Ah, you ignored me. That\'s life!')
+        return
 
     if message.content.lower() == 'super':
         await message.channel.send('Ah, super!')
-
+        return
     elif random.randint(0, 19) == 0:
         if message.channel != 1013977098370699305:
             if random.randint(0, 5) == 0:
                 await message.channel.send('Ah, super!')
         else:
             await message.channel.send('Ah, super!')
+        return
 
     await client.process_commands(message)
 
