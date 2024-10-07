@@ -144,6 +144,13 @@ async def lecturetime(ctx):
     await ctx.send(message)
 
 
+@client.command(name='chinese', description='ask woodard if he knows anything foreign', aliases=['foreignlanguage'])
+async def chinese(ctx):
+    ethnicities = ['Chinese', 'Japanese', 'Korean', 'Vietnamese', 'Filipino', 'Indian', 'Thai', 'Indonesian', 'African',
+                   'South American', 'Native American', 'Middle Eastern']
+    await ctx.send(f'Konichiwa! Yes, I am friends with a lot of {random.choice(ethnicities)} people.')
+
+
 @client.command(name='slides', description='create slides')
 async def slides(ctx, *, msg: str):
     image = Image.open('assets/vapor_trail.png')
