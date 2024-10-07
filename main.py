@@ -41,18 +41,19 @@ async def on_message(message):
         return
     if message.author.bot:
         return
-    if message.author.id == 597056424803303435:
-        message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
 
     if client.user.mention in message.content:
-        try:
-            await message.channel.send(f'Ah, {message.author.mention}, hello! Hey there! How are you?')
-            await client.wait_for('message',
-                                  check=lambda m: m.channel == message.channel and m.author == message.author,
-                                  timeout=20.0)
-            await message.channel.send('Yes,')
-        except asyncio.exceptions.TimeoutError:
-            await message.channel.send('Ah, you ignored me. That\'s life!')
+        if message.author.id == 597056424803303435:
+            message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
+        else:
+            try:
+                await message.channel.send(f'Ah, {message.author.mention}, hello! Hey there! How are you?')
+                await client.wait_for('message',
+                                      check=lambda m: m.channel == message.channel and m.author == message.author,
+                                      timeout=20.0)
+                await message.channel.send('Yes,')
+            except asyncio.exceptions.TimeoutError:
+                await message.channel.send('Ah, you ignored me. That\'s life!')
 
     if message.content.lower() == 'super':
         await message.channel.send('Ah, super!')
