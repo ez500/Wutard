@@ -80,12 +80,12 @@ async def help(ctx):
                    allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=False))
 
 
-@client.command(name='leave', description='leave', aliases=['closeofbusiness'])
+@client.command(name='closeofbusiness', description='leave', aliases=['leave', 'close'])
 async def closeofbusiness(ctx):
     await ctx.send('Take care!')
 
 
-@client.command(name='start', description='start class', aliases=['startofdice'])
+@client.command(name='startofclass', description='start class', aliases=['start', 'startofdice'])
 async def startofclass(ctx):
     if random.randint(0, 1) == 0:
         message = 'Hello! How\'s it going. '
@@ -112,7 +112,7 @@ async def startofclass(ctx):
     await ctx.send(message)
 
 
-@client.command(name='dice', description='roll dice', aliases=['rollthedice'])
+@client.command(name='rollthedice', description='roll dice', aliases=['dice'])
 async def rollthedice(ctx):
     dice = random.randint(1, 6)
     if dice == 1:
@@ -136,7 +136,7 @@ async def rollthedice(ctx):
     await ctx.send(message)
 
 
-@client.command(name='lecture', description='it\'s lecture time', aliases=['lecturetime'])
+@client.command(name='lecturetime', description='it\'s lecture time', aliases=['lecture'])
 async def lecturetime(ctx):
     lectures = ['Unit 1 Primitive Types', 'Unit 2 Using Objects', 'Unit 3 Boolean Expression and if Statements',
                 'Unit 4 Iteration', 'Unit 5 Writing Classes', 'Unit 6 Array', 'Unit 7 ArrayList', 'Unit 8 2DArray',
