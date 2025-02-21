@@ -44,7 +44,7 @@ async def on_message(message):
 
     if client.user.mention in message.content:
         if message.author.id == 597056424803303435:
-            message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
+            await message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
         else:
             try:
                 await message.channel.send(f'Ah, {message.author.mention}, hello! Hey there! How are you?')
@@ -169,13 +169,13 @@ async def slides(ctx, *, msg: str):
 
 
 @tasks.loop(time=datetime.time(hour=18, minute=30))
-async def super_every_two_minutes():
+async def super_every_day():
     await client.wait_until_ready()
     await client.get_channel(1013977098370699305).send('Ah, super!')
 
 
 async def main():
-    super_every_two_minutes.start()
+    super_every_day.start()
     await client.start(token)
 
 
