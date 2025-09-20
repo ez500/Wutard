@@ -167,6 +167,19 @@ async def slides(ctx, *, msg: str):
         upload_image = discord.File(f, spoiler=False)
     await ctx.send(file=upload_image)
 
+@client.command(name='calc1', description='ask woodard about his Calc 1 experience', aliases=['calcone','calc', 'calculus'])
+async def calc1(ctx):
+    await ctx.send('Ah, that\'s life. I took calc twice and failed, so I had to take it a third time. Third time\'s the charm! Ah, super.')
+
+@client.command(name='gpa', description='ask woodard about his gpa in college', aliases=['collegegpa','gpaincollege'])
+async def gpa(ctx):
+    await ctx.send('Ah, not super. When I started college, my GPA was in the points! That\'s life.')
+
+@client.command(name='worksmart', description='woodard likes to work smart by self plagiarizing!', aliases=['plagiarize', 'selfplagiarize'])
+async def worksmart(ctx):
+    await ctx.send('Ah, super! Remember to work smart, as I did in college, when I just turned in a final paper I had for an assignment in a previous' \
+                   'class in the class I took. That is very super and very smart!')
+
 
 @tasks.loop(time=datetime.time(hour=18, minute=30))
 async def super_every_day():
