@@ -2,17 +2,14 @@ import discord
 from discord.ext import commands
 from discord.ext import tasks
 
-import os
 import random
 import datetime
 import asyncio
 
 from PIL import Image, ImageDraw, ImageFont
 
-
 with open('client_token', 'r') as f:
     token = f.readline().strip()
-
 
 client = commands.Bot(command_prefix='super ', help_command=None, intents=discord.Intents.all())
 
@@ -149,7 +146,8 @@ async def lecturetime(ctx):
     await ctx.send(message)
 
 
-@client.command(name='chinese', description='ask woodard if he knows anything foreign', aliases=['foreignlanguage', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
+@client.command(name='chinese', description='ask woodard if he knows anything foreign',
+                aliases=['foreignlanguage', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
 async def chinese(ctx):
     ethnicities = ['Chinese', 'Japanese', 'Korean', 'Vietnamese', 'Filipino', 'Indian', 'Thai', 'Indonesian', 'African',
                    'South American', 'Native American', 'Middle Eastern', 'Muslim', 'Black', 'Hispanic', 'Minority']
@@ -167,18 +165,27 @@ async def slides(ctx, *, msg: str):
         upload_image = discord.File(f, spoiler=False)
     await ctx.send(file=upload_image)
 
-@client.command(name='calc1', description='ask woodard about his Calc 1 experience', aliases=['calcone','calc', 'calculus'])
-async def calc1(ctx):
-    await ctx.send('Ah, that\'s life. I took calc twice and failed, so I had to take it a third time. Third time\'s the charm! Ah, super.')
 
-@client.command(name='gpa', description='ask woodard about his gpa in college', aliases=['collegegpa','gpaincollege'])
+@client.command(name='calc1', description='ask woodard about his Calc 1 experience',
+                aliases=['calcone', 'calc', 'calculus'])
+async def calc1(ctx):
+    await ctx.send(
+        'Ah, that\'s life. I took calc twice and failed, so I had to take it a third time. Third time\'s the charm! '
+        'Ah, super.')
+
+
+@client.command(name='gpa', description='ask woodard about his gpa in college', aliases=['collegegpa', 'gpaincollege'])
 async def gpa(ctx):
     await ctx.send('Ah, not super. When I started college, my GPA was in the points! That\'s life.')
 
-@client.command(name='worksmart', description='woodard likes to work smart by self plagiarizing!', aliases=['plagiarize', 'selfplagiarize'])
+
+@client.command(name='worksmart', description='woodard likes to work smart by self plagiarizing!',
+                aliases=['plagiarize', 'selfplagiarize'])
 async def worksmart(ctx):
-    await ctx.send('Ah, super! Remember to work smart, as I did in college, when I turned in a paper I had for an assignment in a previous' \
-                   'class as the final paper in another class. That is very super and very smart!')
+    await ctx.send(
+        'Ah, super! Remember to work smart, as I did in college, when I turned in a paper I had for an assignment in '
+        'a previous'
+        'class as the final paper in another class. That is very super and very smart!')
 
 
 @tasks.loop(time=datetime.time(hour=18, minute=30))
