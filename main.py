@@ -11,13 +11,29 @@ from PIL import Image, ImageDraw, ImageFont
 with open('client_token', 'r') as f:
     token = f.readline().strip()
 
-client = commands.Bot(command_prefix='super ', help_command=None, intents=discord.Intents.all())
+
+class WutardBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(
+            command_prefix=commands.when_mentioned_or('super '),
+            help_command=None,
+            intents=intents
+        )
+
+    async def setup_hook(self):
+        await self.tree.sync()
+        print("Slash commands synced")
+
+        super_every_day.start()
 
 
-@client.event
-async def on_ready():
-    await client.change_presence(status=discord.Status.idle, activity=discord.Game(name='Ahh..Super!'))
-    print('Logged in')
+    async def on_ready(self):
+        await client.change_presence(status=discord.Status.idle, activity=discord.Game(name='Ahh..Super!'))
+        print('Logged in')
+
+
+client = WutardBot()
 
 
 @client.event
@@ -36,7 +52,7 @@ async def on_guild_join(guild):
 async def on_message(message):
     if message.author == client.user:
         return
-    if message.author.bot:
+    if message.author.client:
         return
 
     if client.user.mention in message.content:
@@ -194,10 +210,5 @@ async def super_every_day():
     await client.get_channel(1013977098370699305).send('Ah, super!')
 
 
-async def main():
-    super_every_day.start()
-    await client.start(token)
-
-
 if __name__ == '__main__':
-    asyncio.run(main())
+    client.run(token)
