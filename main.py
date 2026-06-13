@@ -22,6 +22,8 @@ class WutardBot(commands.Bot):
         )
 
     async def setup_hook(self):
+        await self.load_extension('programming_cog')
+
         await self.tree.sync()
         print("Slash commands synced")
 
