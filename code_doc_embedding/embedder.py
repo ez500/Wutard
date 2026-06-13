@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 
 def build_robot_code_vector_database():
     model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
+    model.max_seq_length = 2048
     client = chromadb.PersistentClient(path="./db")
     collection = client.get_or_create_collection(name="rowdy25_codebase")
 
@@ -79,14 +80,14 @@ def build_robot_code_vector_database():
                         file_count += 1
 
     if documents:
-        embeddings = model.encode(documents).tolist()
+        embeddings = model.encode(documents, batch_size=4, show_progress_bar=True).tolist()
         collection.add(
             embeddings=embeddings,
             documents=documents,
             ids=ids,
             metadatas=metadatas
         )
-        print(f"Completed embedding for {len(documents)} files to ./db/{collection.id}")
+        print(f"Completed embedding for {len(documents)} files to ./db/{collection.id} for rowdy25 robot code")
     else:
         print("No files found to embed.")
 
@@ -94,6 +95,7 @@ def build_robot_code_vector_database():
 def build_external_docs_vector_database(documents, ids, metadatas):
     if documents:
         model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
+        model.max_seq_length = 2048
         client = chromadb.PersistentClient(path="./db")
         collection = client.get_or_create_collection(name="external_docs")
 
@@ -128,7 +130,7 @@ def build_external_docs_vector_database(documents, ids, metadatas):
             print("No files found to embed.")
             return
 
-        embeddings = model.encode(cleaned_documents).tolist()
+        embeddings = model.encode(cleaned_documents, batch_size=4, show_progress_bar=True).tolist()
         collection.add(
             embeddings=embeddings,
             documents=cleaned_documents,
@@ -136,7 +138,7 @@ def build_external_docs_vector_database(documents, ids, metadatas):
             ids=cleaned_ids
         )
 
-        vendor_name = cleaned_ids[0].split("_", 1)[0]
+        vendor_name = cleaned_metadatas[0].split("/", 1)[0]
         print(f"Completed embedding for {len(cleaned_documents)} files to ./db/{collection.id} for "
               f"{vendor_name} external vendor")
     else:
