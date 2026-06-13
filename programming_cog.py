@@ -10,10 +10,12 @@ with open('claude_key', 'r') as f:
 
 def retrieve_relevant_context(results):
     retrieved_context = ""
-    if results['documents'] and results['documents'][0]:  # TODO: SOURCE INJECTION
+    if results['documents'] and results['documents'][0]:
         for i, doc in enumerate(results['documents'][0]):
             file_id = results['ids'][0][i]
-            retrieved_context += f"\n--- Start of snippet from {file_id} ---\n"
+            source = results['metadatas'][0][i].get('source', 'Unknown')
+
+            retrieved_context += f"\n--- Start of snippet {file_id} (from {source}) ---\n"
             retrieved_context += doc
             retrieved_context += "\n--- End of snippet ---\n"
     return retrieved_context if retrieved_context else "No relevant documentation found"
@@ -24,23 +26,20 @@ class Programming(commands.Cog):
         self.client = client
 
         self.embedding_model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
+        self.embedding_model.max_seq_length = 2048
         self.chroma_client = chromadb.PersistentClient(path="./code_doc_embedding/db")
         self.code_collection = self.chroma_client.get_collection("rowdy25_codebase")
         self.external_docs_collection = self.chroma_client.get_collection("external_docs")
 
-    @commands.hybrid_command(name="test", help="Responds with a test message.")
-    async def test(self, ctx):
-        await ctx.send("Test message.")
-
-    def search_code_rag(self, query, top_k=3):  # TODO: VENDOR FILTER
+    def search_code_rag(self, query, top_k=3):
         query_embedding = self.embedding_model.encode([query]).tolist()
         results = self.code_collection.query(query_embeddings=query_embedding, n_results=top_k)
         return retrieve_relevant_context(results)
 
-    def search_external_docs_rag(self, query, top_k=3):
+    def search_external_docs_rag(self, query, top_k=3, vendor_filter=None):
         query_embedding = self.embedding_model.encode([query]).tolist()
         results = self.external_docs_collection.query(query_embeddings=query_embedding, n_results=top_k)
-        return retrieve_relevant_context(results)
+        return retrieve_relevant_context(results, vendor_filter)
 
     def system_guardrail(self, user_query):
         # TODO: RUN THE FIRST CHECK OF RELEVANCE + ONE QUESTION ONLY
@@ -64,7 +63,10 @@ class Programming(commands.Cog):
                                                                "'PathPlanner AutoBuilder constructors'"},
                     "top_k": {"type": "integer",
                               "description": "The number of results to return, depending on how large "
-                                             "or broad in scope the query is"}
+                                             "or broad in scope the query is (default is 3)"},
+                    "vendor_filter": {"type": "string",
+                                      "description": "Optional vendor to filter by (choose from WPILib, DogLog,"
+                                                     "PhotonLib, Phoenix6, PathPlanner, REVLib, ReduxLib)"}
                 },
                 "required": ["query"]
             }
@@ -90,6 +92,10 @@ class Programming(commands.Cog):
 
                 tool_result = self.search_code_rag(query_arg)
                 print(f"Extracted documentation: {tool_result}")
+
+    @commands.hybrid_command(name="test", help="Responds with a test message.")
+    async def test(self, ctx):
+        await ctx.send("Test message.")
 
 
 async def setup(client):
