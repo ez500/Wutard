@@ -1,6 +1,7 @@
 import anthropic
-from discord.ext import commands
 import chromadb
+from anthropic.types import ToolParam, MessageParam, ToolUseBlock
+from discord.ext import commands
 from sentence_transformers import SentenceTransformer
 
 
@@ -31,6 +32,8 @@ class Programming(commands.Cog):
         self.code_collection = self.chroma_client.get_collection("rowdy25_codebase")
         self.external_docs_collection = self.chroma_client.get_collection("external_docs")
 
+        self.claude_client = anthropic.Anthropic(api_key=api_key)
+
     def search_code_rag(self, query, top_k=3):
         query_embedding = self.embedding_model.encode([query]).tolist()
         results = self.code_collection.query(query_embeddings=query_embedding, n_results=top_k)
@@ -38,56 +41,79 @@ class Programming(commands.Cog):
 
     def search_external_docs_rag(self, query, top_k=3, vendor_filter=None):
         query_embedding = self.embedding_model.encode([query]).tolist()
-        results = self.external_docs_collection.query(query_embeddings=query_embedding, n_results=top_k)
-        return retrieve_relevant_context(results, vendor_filter)
+
+        where_clause = None
+
+        if vendor_filter:
+            if len(vendor_filter) == 1:
+                where_clause = {"source": {"$contains": vendor_filter[0]}}
+            else:
+                where_clause = {"$or": [{"source": {"$contains": vendor}} for vendor in vendor_filter]}
+
+        query_kwargs = {"query_embeddings": query_embedding, "n_results": min(top_k, 8), "where": where_clause}
+
+        results = self.external_docs_collection.query(**query_kwargs)
+        return retrieve_relevant_context(results)
 
     def system_guardrail(self, user_query):
         # TODO: RUN THE FIRST CHECK OF RELEVANCE + ONE QUESTION ONLY
         pass
 
     def run_agentic_query(self, user_query):
-        client = anthropic.Anthropic(api_key=api_key)
-
         system_prompt = (f"You are an expert FRC programmer. Answer the user's question concisely using the "
                          f"following snippets from our team's codebase: "
                          f"{self.search_code_rag(user_query)}")
 
-        tool_schema = [{
+        tool_schema: list[ToolParam] = [{
             "name": "search_external_docs_rag",
             "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
                            "specific API details, hardware characteristics, framework constraints, etc.",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The query to search for, e.g., "
-                                                               "'PathPlanner AutoBuilder constructors'"},
-                    "top_k": {"type": "integer",
-                              "description": "The number of results to return, depending on how large "
-                                             "or broad in scope the query is (default is 3)"},
-                    "vendor_filter": {"type": "string",
-                                      "description": "Optional vendor to filter by (choose from WPILib, DogLog,"
-                                                     "PhotonLib, Phoenix6, PathPlanner, REVLib, ReduxLib)"}
+                    "query": {
+                        "type": "string",
+                        "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "The number of document chunks (results) to return, depending on how large or "
+                                       "broad in scope the query is. Use 1-3 for specific API checks, 3-6 for "
+                                       "standard queries, and 6-8 for broad conceptual questions.",
+                        "minimum": 1,
+                        "maximum": 8
+                    },
+                    "vendor_filter": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["WPILib", "DogLog", "PhotonLib", "Phoenix6", "PathPlanner", "REVLib", "ReduxLib"]
+                        },
+                        "description": "Optional list of vendors to search by. Leave empty to search all vendors."}
                 },
                 "required": ["query"]
             }
         }]
 
+        messages: list[MessageParam] = [
+            {"role": "user", "content": ("I am writing code for our FRC robot. Why might our CANSparkMax be "
+                                         "stuttering? What are its current limits?")}
+        ]
+
         print("Sending prompt to Claude")
-        response = client.messages.create(
+        response = self.claude_client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=2048,
             tools=tool_schema,
-            messages=[
-                {"role": "user", "content": ("I am writing code for our FRC robot. Why might our CANSparkMax be "
-                                             "stuttering? What are its current limits?")}
-            ]
+            system=system_prompt,
+            messages=messages
         )
 
         if response.stop_reason == "tool_use":
             print(f"External documentation required, stopping generation")
-            tool_block = next(block for block in response.content if block["type"] == "tool_use")
+            tool_block = next((block for block in response.content if isinstance(block, ToolUseBlock)), None)
 
-            if tool_block.name == "search_vector_databases":
+            if tool_block and tool_block.name == "search_external_docs_rag":
                 query_arg = tool_block.input["query"]
 
                 tool_result = self.search_code_rag(query_arg)
@@ -104,5 +130,5 @@ async def setup(client):
 
 if __name__ == "__main__":
     test = Programming(None)
-    context = test.search_code_rag("What does RobotStates do?", collection_name="rowdy25_codebase")
+    context = test.search_code_rag("What does RobotStates do?")
     print(context)
