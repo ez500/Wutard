@@ -8,7 +8,7 @@ import asyncio
 
 from PIL import Image, ImageDraw, ImageFont
 
-with open('client_token', 'r') as f:
+with open('discord_token', 'r') as f:
     token = f.readline().strip()
 
 

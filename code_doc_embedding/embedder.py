@@ -8,24 +8,74 @@ from sentence_transformers import SentenceTransformer
 
 
 def build_robot_code_vector_database():
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
     client = chromadb.PersistentClient(path="./db")
     collection = client.get_or_create_collection(name="rowdy25_codebase")
 
+    headers_to_split_on = [
+        ("#", "Header 1"),
+        ("##", "Header 2"),
+        ("###", "Header 3"),
+    ]
+    separators = [
+        "\n\npublic ",
+        "\n\nprivate ",
+        "\n\nprotected ",
+        "\n\n@Override",
+        "\n\nclass ",
+        "\n\n",
+        "\n",
+        " "
+    ]
+    markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+    code_splitter = RecursiveCharacterTextSplitter(separators=separators, chunk_size=1000, chunk_overlap=150)
+
     documents = []
     ids = []
+    metadatas = []
     file_count = 0
 
     for root, _, files in os.walk("/home/bigfatmidget/Projects/Robotics/Rowdy25"):
         for filename in files:
-            if filename.endswith(".md") or filename.endswith(".java"):
+            if filename.endswith(".java"):
                 file_path = os.path.join(root, filename)
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
 
                     if content.strip():
-                        documents.append(content)
-                        ids.append(f"{file_count}_{file_path}")
+                        splits = code_splitter.split_text(content)
+
+                        for idx, split in enumerate(splits):
+                            documents.append(split)
+                            ids.append(f"rowdy25_{file_count}_{file_path}_chunk_{idx}")
+                            metadatas.append({
+                                "source": f"Rowdy25/{filename}",
+                                "file_path": file_path,
+                                "filename": filename,
+                                "chunk_index": idx,
+                                "extension": ".java",
+                            })
+                        file_count += 1
+
+            elif filename.endswith(".md"):
+                file_path = os.path.join(root, filename)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+
+                    if content.strip():
+                        splits = markdown_splitter.split_text(content)
+
+                        for idx, split in enumerate(splits):
+                            documents.append(split.page_content)
+                            ids.append(f"rowdy25_{file_count}_{file_path}_chunk_{idx}")
+                            metadatas.append({
+                                "source": f"WPILib/{filename}",
+                                "file_path": file_path,
+                                "filename": filename,
+                                "chunk_index": idx,
+                                "extension": ".md",
+                                **split.metadata,
+                            })
                         file_count += 1
 
     if documents:
@@ -33,7 +83,8 @@ def build_robot_code_vector_database():
         collection.add(
             embeddings=embeddings,
             documents=documents,
-            ids=ids
+            ids=ids,
+            metadatas=metadatas
         )
         print(f"Completed embedding for {len(documents)} files to ./db/{collection.id}")
     else:
@@ -42,7 +93,7 @@ def build_robot_code_vector_database():
 
 def build_external_docs_vector_database(documents, ids, metadatas):
     if documents:
-        model = SentenceTransformer('all-MiniLM-L6-v2')
+        model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
         client = chromadb.PersistentClient(path="./db")
         collection = client.get_or_create_collection(name="external_docs")
 
@@ -125,7 +176,7 @@ def build_wpilib_vector_database():
                                 "chunk_index": idx,
                                 **split.metadata,
                             })
-                            file_count += 1
+                        file_count += 1
 
     build_external_docs_vector_database(documents, ids, metadatas)
 
@@ -163,7 +214,7 @@ def build_doglog_vector_database():
                                 "chunk_index": idx,
                                 **split.metadata,
                             })
-                            file_count += 1
+                        file_count += 1
 
     build_external_docs_vector_database(documents, ids, metadatas)
 
@@ -201,13 +252,13 @@ def build_photonlib_vector_database():
                                 "chunk_index": idx,
                                 **split.metadata,
                             })
-                            file_count += 1
+                        file_count += 1
 
     build_external_docs_vector_database(documents, ids, metadatas)
 
 
 def build_phoenix6_vector_database():
-    headers_to_split_on = [
+    separators = [
         r"\n\n",
         r"\n=+\n",
         r"\n-+\n",
@@ -216,7 +267,7 @@ def build_phoenix6_vector_database():
         r" "
     ]
     rst_splitter = RecursiveCharacterTextSplitter(
-        separators=headers_to_split_on,
+        separators=separators,
         is_separator_regex=True,
         chunk_size=1000,
         chunk_overlap=150
@@ -246,7 +297,7 @@ def build_phoenix6_vector_database():
                                 "filename": filename,
                                 "chunk_index": idx,
                             })
-                            file_count += 1
+                        file_count += 1
 
     build_external_docs_vector_database(documents, ids, metadatas)
 
@@ -285,7 +336,7 @@ def build_pathplanner_vector_database():
                                 "chunk_index": idx,
                                 **split.metadata,
                             })
-                            file_count += 1
+                        file_count += 1
 
             elif filename.endswith(".topic"):
                 file_path = os.path.join(root, filename)
@@ -313,9 +364,10 @@ def build_revlib_vector_database():
     loader = RecursiveUrlLoader(
         url="https://docs.revrobotics.com/revlib",
         max_depth=3,
+        prevent_outside=True,
         extractor=lambda html_content: (
             BeautifulSoup(html_content, "html.parser").get_text(separator="\n", strip=True)
-        )
+        ),
     )
 
     web_docs = loader.load()
@@ -337,7 +389,7 @@ def build_revlib_vector_database():
                     "source": doc.metadata.get('source', "REVLib"),
                     "chunk_index": idx,
                 })
-                file_count += 1
+        file_count += 1
 
     build_external_docs_vector_database(documents, ids, metadatas)
 
@@ -346,6 +398,7 @@ def build_reduxlib_vector_database():
     loader = RecursiveUrlLoader(
         url="https://docs.reduxrobotics.com/",
         max_depth=3,
+        prevent_outside=True,
         extractor=lambda html_content: (
             BeautifulSoup(html_content, "html.parser").get_text(separator="\n", strip=True)
         )
@@ -370,19 +423,9 @@ def build_reduxlib_vector_database():
                     "source": doc.metadata.get('source', "ReduxLib"),
                     "chunk_index": idx,
                 })
-                file_count += 1
+        file_count += 1
 
     build_external_docs_vector_database(documents, ids, metadatas)
-
-
-def search_vector_databases(query, collection_name="rowdy25_codebase", top_k=3):
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    client = chromadb.PersistentClient(path="./db")
-    collection = client.get_collection(collection_name)
-
-    query_embedding = model.encode([query]).tolist()
-    results = collection.query(query_embeddings=query_embedding, n_results=top_k)
-    return results['documents'][0] if results['documents'] else ["No relevant results found"]
 
 
 if __name__ == "__main__":
