@@ -258,11 +258,14 @@ class AgenticRAGService:
 
     async def run_agentic_query(self, user_query):
         # TODO: CREATE CONVERSATION HISTORY
-        system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely. Use the tools "
-                         "made available to you to answer questions about the codebase, hardware, and API details. "
-                         "For searching Rowdy25 code, you must generate your own 3 precise technical search queries "
+        system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely (50 words). "
+                         "The broader the question, the less specific you can be in your answer. "
+                         "Only use each tool once. Do not strive for perfection. "
+                         "Use the available tools to answer questions about the codebase, "
+                         "hardware, and API details. "
+                         "For searching Rowdy25 code, you must generate up to 3 precise technical search queries "
                          "for the string query argument that is in the form '[query1, query2, query3]', with each "
-                         "query limited to less than 6 words per query. "
+                         "query limited to less than 6 words per query. Be clever with your queries. "
                          "Here is the list of classes that might be useful to include in your queries: "
                          "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
                          "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, WristCommand, "
@@ -310,10 +313,10 @@ class AgenticRAGService:
                         "top_k": {
                             "type": "integer",
                             "description": "The number of document chunks (results) to return, depending on how large "
-                                           "or broad in scope the query is. Use 1-3 for specific API checks, 3-6 for "
-                                           "standard queries, and 6-8 for broad conceptual questions.",
+                                           "or broad in scope the query is. Use 1 for specific API checks, 2 for "
+                                           "standard queries, and 3 for broad conceptual questions.",
                             "minimum": 1,
-                            "maximum": 8
+                            "maximum": 3
                         },
                     },
                     "required": ["query"]
@@ -333,10 +336,10 @@ class AgenticRAGService:
                         "top_k": {
                             "type": "integer",
                             "description": "The number of document chunks (results) to return, depending on how large "
-                                           "or broad in scope the query is. Use 1-3 for specific API checks, 3-6 for "
-                                           "standard queries, and 6-8 for broad conceptual questions.",
+                                           "or broad in scope the query is. Use 1 for specific API checks, 2 for "
+                                           "standard queries, and 3 for broad conceptual questions.",
                             "minimum": 1,
-                            "maximum": 8
+                            "maximum": 3
                         },
                         "vendor_filter": {
                             "type": "array",
@@ -367,11 +370,11 @@ class AgenticRAGService:
             if response.stop_reason == "end_turn":
                 thinking_blocks = [block for block in response.content if isinstance(block, ThinkingBlock)]
                 if thinking_blocks:
-                    print(f"Retrieved {len(thinking_blocks)} thinking blocks:")
+                    print(f"\nRetrieved {len(thinking_blocks)} thinking blocks:\n")
                     for i, block in enumerate(thinking_blocks):
                         print(f"Block {i + 1}:\n{block.thinking}\n\n")
                 else:
-                    print("No extended thinking blocks in this turn.")
+                    print("\nNo extended thinking blocks in this turn.\n")
 
                 text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
                 if text_block:
@@ -392,11 +395,16 @@ class AgenticRAGService:
 
                         if not isinstance(query, str):
                             tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                            print("Failed searching for Rowdy25 docs, invalid inputs.")
                         else:
                             if not isinstance(top_k, int):
                                 top_k = 3
                             tool_result = self.search_rowdy25(query, top_k)
-                        print(f"Extracted documentation:\n{tool_result}\n\n")
+                            print(f"\nSearching for Rowdy25 docs!\n"
+                                  f"Query: {query}\n"
+                                  f"Top K results (order of context): {top_k}\n"
+                                  f"Extracted Rowdy25 material:\n"
+                                  f"{tool_result}\n\n")
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": tool_block.id,
@@ -410,6 +418,7 @@ class AgenticRAGService:
 
                         if not isinstance(query, str):
                             tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                            print("Failed searching for Rowdy25 docs, invalid inputs.")
                         else:
                             if not isinstance(top_k, int):
                                 top_k = 3
@@ -419,7 +428,12 @@ class AgenticRAGService:
                             else:
                                 vendor_filter = [vendor for vendor in vendor_filter if isinstance(vendor, str)]
                             tool_result = self.search_external_docs(query, top_k, vendor_filter)
-                        print(f"Extracted documentation:\n{tool_result}\n\n")
+                            print(f"\nSearching for Rowdy25 docs!\n"
+                                  f"Query: {query}\n"
+                                  f"Top K results (order of context): {top_k}\n"
+                                  f"Vendor filter: {vendor_filter if vendor_filter else "All"}\n"
+                                  f"Extracted Rowdy25 material:\n"
+                                  f"{tool_result}\n\n")
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": tool_block.id,
@@ -430,11 +444,18 @@ class AgenticRAGService:
 
 if __name__ == "__main__":
     test = AgenticRAGService()
-    # context = asyncio.run(test.search_rowdy25("What does RobotStates do?"))
-    # context = asyncio.run(test.run_agentic_query(
-    #     "How does the robot pathfind avoiding the reef using commands?"
+    # robot_context = asyncio.run(test.search_rowdy25("What does RobotStates do?")) # BAD (13 cents)
+    # robot_context = asyncio.run(test.run_agentic_query(
+    #     "How does the robot pathfind avoiding the reef using commands?" # BAD (8 cents)
     # ))
-    context = asyncio.run(test.run_agentic_query(
-        "What exactly does the SameSide method calculate when pathfinding avoiding the reef?"
+    # robot_context = asyncio.run(test.run_agentic_query( # ACCEPTABLE (6 cents)
+    #     "Can you clarify what the SameSide method calculates when pathfinding avoiding the reef?"
+    # ))
+    # robot_context = asyncio.run(test.run_agentic_query(
+    #     "What does two convenience composites mean for fields atReefAlgaeState and atAutoScoreState?" # GOOD (1 cent)
+    # ))
+    # print(robot_context)
+    docs_context = asyncio.run(test.run_agentic_query(
+        "What is different between PathPlanner PID and WPILib PID?"
     ))
-    print(context)
+    print(docs_context)
