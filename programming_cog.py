@@ -99,24 +99,50 @@ class Programming(commands.Cog):
             }
         }]
 
-        print("Sending prompt to Claude")
-        response = self.claude_client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=2048,
-            tools=tool_schema,
-            system=system_prompt,
-            messages=conversation_history
-        )
+        conversation_history: list[MessageParam] = [{"role": "user", "content": user_query}]
 
-        if response.stop_reason == "tool_use":
-            print(f"External documentation required, stopping generation")
-            tool_block = next((block for block in response.content if isinstance(block, ToolUseBlock)), None)
+        while True:
+            print("Sending prompt to Claude...")
+            response = self.claude_client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2048,
+                tools=tool_schema,
+                system=system_prompt,
+                messages=conversation_history
+            )
 
-            if tool_block and tool_block.name == "search_external_docs_rag":
-                query_arg = tool_block.input["query"]
+            if response.stop_reason == "end_turn":
+                thinking_blocks = [block for block in response.content if isinstance(block, ThinkingBlock)]
+                if thinking_blocks:
+                    print(f"Retrieved {len(thinking_blocks)} thinking blocks:")
+                    for i, block in enumerate(thinking_blocks):
+                        print(f"Block {i + 1}:\n{block.thinking}\n\n")
+                else:
+                    print("No extended thinking blocks in this turn.")
 
-                tool_result = self.search_code_rag(query_arg)
-                print(f"Extracted documentation: {tool_result}")
+                text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
+                if text_block:
+                    return text_block.text
+                else:
+                    return "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+
+            if response.stop_reason == "tool_use":
+                print(f"External documentation required, deploying retrieval")
+                conversation_history.append({"role": "assistant", "content": response.content})
+
+                tool_blocks = [block for block in response.content if isinstance(block, ToolUseBlock)]
+                tool_results = []
+                for tool_block in tool_blocks:
+                    if tool_block and tool_block.name == "search_external_docs_rag":
+                        tool_result = self.search_external_docs_rag(tool_block.input["query"])
+                        print(f"Extracted documentation:\n{tool_result}\n\n")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_block.id,
+                            "content": tool_result
+                        })
+
+                conversation_history.append({"role": "user", "content": tool_results})
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -129,7 +155,7 @@ class Programming(commands.Cog):
             return
 
         if message.channel.id == 1292666640256991282 or message.channel.id == 1013977098370699305:
-            message.channel.send("Hello!")
+            await message.channel.send(self.run_agentic_query(message.content))
 
 
 async def setup(client):
