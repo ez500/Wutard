@@ -19,17 +19,19 @@ def build_robot_code_vector_database():
         ("###", "Header 3"),
     ]
     separators = [
-        "\n\npublic ",
+        "\n\npublic class ",
+        "\n\npublic final class ",
+        "\n\nclass ",
+        "\n\npublic "
         "\n\nprivate ",
         "\n\nprotected ",
         "\n\n@Override",
-        "\n\nclass ",
         "\n\n",
         "\n",
         " "
     ]
     markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
-    code_splitter = RecursiveCharacterTextSplitter(separators=separators, chunk_size=1000, chunk_overlap=150)
+    code_splitter = RecursiveCharacterTextSplitter(separators=separators, chunk_size=4000, chunk_overlap=600)
 
     documents = []
     ids = []
@@ -70,7 +72,7 @@ def build_robot_code_vector_database():
                             documents.append(split.page_content)
                             ids.append(f"rowdy25_{file_count}_{file_path}_chunk_{idx}")
                             metadatas.append({
-                                "source": f"WPILib/{filename}",
+                                "source": f"Rowdy25/{filename}",
                                 "file_path": file_path,
                                 "filename": filename,
                                 "chunk_index": idx,
@@ -272,8 +274,8 @@ def build_phoenix6_vector_database():
     rst_splitter = RecursiveCharacterTextSplitter(
         separators=separators,
         is_separator_regex=True,
-        chunk_size=1000,
-        chunk_overlap=150
+        chunk_size=2500,
+        chunk_overlap=350
     )
 
     documents = []
@@ -312,7 +314,7 @@ def build_pathplanner_vector_database():
         ("###", "Header 3"),
     ]
     markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
-    xml_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    xml_splitter = RecursiveCharacterTextSplitter(chunk_size=2500, chunk_overlap=350)
 
     documents = []
     ids = []
@@ -374,7 +376,7 @@ def build_revlib_vector_database():
     )
 
     web_docs = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
 
     documents = []
     ids = []
@@ -390,6 +392,7 @@ def build_revlib_vector_database():
                 ids.append(f"revlib_{file_count}_{doc.metadata['source']}_chunk_{idx}")
                 metadatas.append({
                     "source": doc.metadata.get('source', "REVLib"),
+                    "file_path": {doc.metadata['source']},
                     "chunk_index": idx,
                 })
         file_count += 1
@@ -408,7 +411,7 @@ def build_reduxlib_vector_database():
     )
 
     web_docs = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
 
     documents = []
     ids = []
@@ -424,6 +427,7 @@ def build_reduxlib_vector_database():
                 ids.append(f"reduxlib_{file_count}_{doc.metadata['source']}_chunk_{idx}")
                 metadatas.append({
                     "source": doc.metadata.get('source', "ReduxLib"),
+                    "file_path": {doc.metadata['source']},
                     "chunk_index": idx,
                 })
         file_count += 1
