@@ -1,6 +1,10 @@
+import os
+from typing import Any
+
 import anthropic
 import chromadb
-from anthropic.types import ToolParam, MessageParam, ToolUseBlock
+from chromadb.errors import InternalError
+from anthropic.types import ToolParam, MessageParam, ToolUseBlock, TextBlock, ThinkingBlock
 from discord.ext import commands
 from sentence_transformers import SentenceTransformer
 
@@ -28,7 +32,11 @@ class Programming(commands.Cog):
 
         self.embedding_model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
         self.embedding_model.max_seq_length = 2048
-        self.chroma_client = chromadb.PersistentClient(path="./code_doc_embedding/db")
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        chroma_db_path = os.path.join(base_dir, "code_doc_embedding", "db")
+
+        self.chroma_client = chromadb.PersistentClient(path=chroma_db_path)
         self.code_collection = self.chroma_client.get_collection("rowdy25_codebase")
         self.external_docs_collection = self.chroma_client.get_collection("external_docs")
 
@@ -36,7 +44,14 @@ class Programming(commands.Cog):
 
     def search_code_rag(self, query, top_k=3):
         query_embedding = self.embedding_model.encode([query]).tolist()
-        results = self.code_collection.query(query_embeddings=query_embedding, n_results=top_k)
+
+        try:
+            results = self.code_collection.query(query_embeddings=query_embedding, n_results=top_k)
+        except InternalError:
+            raise RuntimeError(
+                "Local Chroma vector database index could not be loaded. Usually this means './code_doc_embedding/db' "
+                "is corrupted or was created with an incompatible Chroma version. Stop the bot, move the database (db) "
+                "to a backup location, and rebuild it using code_doc_embedding/embedder.py.")
         return retrieve_relevant_context(results)
 
     def search_external_docs_rag(self, query, top_k=3, vendor_filter=None):
@@ -50,9 +65,18 @@ class Programming(commands.Cog):
             else:
                 where_clause = {"$or": [{"source": {"$contains": vendor}} for vendor in vendor_filter]}
 
-        query_kwargs = {"query_embeddings": query_embedding, "n_results": min(top_k, 8), "where": where_clause}
+        query_kwargs: dict[str, Any] = {"query_embeddings": query_embedding, "n_results": min(top_k, 8), }
 
-        results = self.external_docs_collection.query(**query_kwargs)
+        if where_clause is not None:
+            query_kwargs["where"] = where_clause
+
+        try:
+            results = self.external_docs_collection.query(**query_kwargs)
+        except InternalError:
+            raise RuntimeError(
+                "Local Chroma vector database index could not be loaded. Usually this means './code_doc_embedding/db' "
+                "is corrupted or was created with an incompatible Chroma version. Stop the bot, move the database (db) "
+                "to a backup location, and rebuild it using code_doc_embedding/embedder.py.")
         return retrieve_relevant_context(results)
 
     def system_guardrail(self, user_query):
@@ -61,9 +85,6 @@ class Programming(commands.Cog):
 
     def run_agentic_query(self, user_query):
         # TODO: CREATE CONVERSATION HISTORY
-        # TODO: PARALLEL + SEQUENTIAL TOOL USE CASES
-        conversation_history: list[MessageParam] = [{"role": "user", "content": user_query}]
-
         system_prompt = (f"You are an expert FRC programmer. Answer the user's question concisely using the "
                          f"following snippets from our team's codebase: "
                          f"{self.search_code_rag(user_query)}")

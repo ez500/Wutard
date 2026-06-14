@@ -103,18 +103,18 @@ def build_external_docs_vector_database(documents, ids, metadatas):
         cleaned_ids = []
         cleaned_metadatas = []
 
-        for document, id, metadata in zip(documents, ids, metadatas):
+        for document, doc_id, metadata in zip(documents, ids, metadatas):
             if not document or not document.strip():
                 continue
 
             if not isinstance(metadata, dict):
                 metadata = {}
 
-            vendor = id.split("_", 1)[0] if "_" in id else "unknown"
+            vendor = doc_id.split("_", 1)[0] if "_" in doc_id else "unknown"
 
             normalized_metadata = {
                 "vendor": vendor,
-                "id": id,
+                "id": doc_id,
                 **metadata,
             }
 
@@ -123,7 +123,7 @@ def build_external_docs_vector_database(documents, ids, metadatas):
             }
 
             cleaned_documents.append(document)
-            cleaned_ids.append(id)
+            cleaned_ids.append(doc_id)
             cleaned_metadatas.append(normalized_metadata)
 
         if not cleaned_documents or not cleaned_ids or not cleaned_metadatas:
@@ -447,4 +447,3 @@ if __name__ == "__main__":
     # print("\nSample Documents:")
     # print(sample_data['documents'][0])
     # print(sample_data['documents'][1])
-
