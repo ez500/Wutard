@@ -4,6 +4,7 @@ from typing import Any
 
 import anthropic
 import chromadb
+import numpy as np
 from anthropic.types import ToolParam, MessageParam, ThinkingBlock, TextBlock, ToolUseBlock
 from chromadb.errors import InternalError
 from rank_bm25 import BM25Okapi
@@ -56,8 +57,8 @@ class AgenticRAGService:
         bm25_index = BM25Okapi(corpus)
         return bm25_index, all_ids
 
-    @staticmethod
-    def _query_document_embeddings(collection, query_embedding, top_k=3, vendor_filter=None):
+    def _query_document_embeddings(self, collection, query, top_k=3, vendor_filter=None):
+        query_embedding = self.embedding_model.encode([query]).tolist()
         where_clause = None
         if vendor_filter:
             if len(vendor_filter) == 1:
@@ -72,72 +73,122 @@ class AgenticRAGService:
 
         try:
             results = collection.query(**query_kwargs)
-            return AgenticRAGService._retrieve_relevant_context(results, collection)
+            return results["ids"][0] if results["ids"] else []
         except InternalError:
             raise RuntimeError(
                 "Local Chroma vector database index could not be loaded. Usually this means './code_doc_embedding/db' "
                 "is corrupted or was created with an incompatible Chroma version. Stop the bot, move the database (db) "
                 "to a backup location, and rebuild it using code_doc_embedding/embedder.py.")
 
+    def _query_keyword_index(
+            self,
+            collection,
+            keyword_index,
+            query,
+            top_k=3,
+            vendor_filter=None
+    ):
+        where_clause = None
+        if vendor_filter:
+            if len(vendor_filter) == 1:
+                where_clause = {"source": {"$contains": vendor_filter[0]}}
+            else:
+                where_clause = {"$or": [{"source": {"$contains": vendor}} for vendor in vendor_filter]}
+
+        tokenized_query = self._tokenize_code(query)
+        bm25_scores = keyword_index.get_scores(tokenized_query)
+
+        keyword_hits = []
+
+        allowed_ids = set()
+        if where_clause:
+            allowed_ids = set(collection.get(where=where_clause)["ids"])
+
+        top_indices = np.argsort(bm25_scores)[::-1]
+        for idx in top_indices:
+            doc_id = self.code_ids[idx]
+            if where_clause and doc_id not in allowed_ids:
+                continue
+            keyword_hits.append(doc_id)
+
+            if len(keyword_hits) == top_k:
+                break
+        return keyword_hits
+
     @staticmethod
-    def _retrieve_relevant_context(initial_results, collection):
-        final_results = {}
-        retrieved_context = ""
+    def _reciprocal_rank_fusion(vector_hits, keyword_hits, top_k=3):
+        rrf_scores = {}
+        k = 60
 
+        for rank, doc_id in enumerate(vector_hits, start=1):
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + (1 / (k + rank))
+        for rank, doc_id in enumerate(keyword_hits, start=1):
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + (1 / (k + rank))
+        ranked_doc_ids = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        top_final_ids = [doc_id for doc_id, _ in ranked_doc_ids[:top_k]]
+        return top_final_ids if top_final_ids else ["No relevant results found"]
+
+    @staticmethod
+    def _retrieve_relevant_context(initial_result_ids, collection):
+        initial_results = collection.get(ids=initial_result_ids)
         result_metadatas = initial_results["metadatas"]
-        if result_metadatas and result_metadatas[0]:
-            results_by_file = {}
-            for metadata in result_metadatas[0]:
-                if not metadata:
-                    continue
 
-                file_path = metadata.get("file_path")
-                chunk_idx = metadata.get("chunk_index")
-                if not isinstance(file_path, str):
-                    continue
-                if not isinstance(chunk_idx, (str, int)) or isinstance(chunk_idx, bool):
-                    continue
-                chunk_idx = int(chunk_idx)
+        if not result_metadatas or result_metadatas[0]:
+            return "\n\n".join(initial_results.get("documents", []))
 
-                if file_path not in results_by_file:
-                    results_by_file[file_path] = set()
+        results_by_file = {}
+        for metadata in result_metadatas[0]:
+            if not metadata:
+                continue
 
-                results_by_file[file_path].update([max(0, chunk_idx - 1), chunk_idx, chunk_idx + 1])
+            file_path = metadata.get("file_path")
+            chunk_idx = metadata.get("chunk_index")
+            if not isinstance(file_path, str):
+                continue
+            if not isinstance(chunk_idx, (str, int)) or isinstance(chunk_idx, bool):
+                continue
+            chunk_idx = int(chunk_idx)
 
-            or_conditions = [
-                {
-                    "$and": [
-                        {"file_path": file_path},
-                        {"chunk_index": {"$in": list(chunk_indices)}}
-                    ]
-                }
-                for file_path, chunk_indices in results_by_file.items()
-            ]
+            if file_path not in results_by_file:
+                results_by_file[file_path] = set()
 
-            where_clause = or_conditions[0] if len(or_conditions) == 1 else {"$or": or_conditions}
+            results_by_file[file_path].update([max(0, chunk_idx - 1), chunk_idx, chunk_idx + 1])
 
-            expanded_results = collection.get(where=where_clause)
-            expanded_documents = expanded_results["documents"] or []
-            expanded_ids = expanded_results["ids"] or []
-            expanded_metadatas = expanded_results["metadatas"] or []
-
-            zipped_results = zip(
-                expanded_documents,
-                expanded_ids,
-                expanded_metadatas
-            )
-
-            sorted_results = sorted(
-                zipped_results,
-                key=lambda by_meta: (by_meta[2]["file_path"], int(by_meta[2]["chunk_index"]))
-            )
-
-            final_results = {
-                "documents": [[result[0] for result in sorted_results]],
-                "ids": [[result[1] for result in sorted_results]],
-                "metadatas": [[result[2] for result in sorted_results]]
+        or_conditions = [
+            {
+                "$and": [
+                    {"file_path": file_path},
+                    {"chunk_index": {"$in": list(chunk_indices)}}
+                ]
             }
+            for file_path, chunk_indices in results_by_file.items()
+        ]
 
+        where_clause = or_conditions[0] if len(or_conditions) == 1 else {"$or": or_conditions}
+
+        expanded_results = collection.get(where=where_clause)
+        expanded_documents = expanded_results["documents"] or []
+        expanded_ids = expanded_results["ids"] or []
+        expanded_metadatas = expanded_results["metadatas"] or []
+
+        zipped_results = zip(
+            expanded_documents,
+            expanded_ids,
+            expanded_metadatas
+        )
+
+        sorted_results = sorted(
+            zipped_results,
+            key=lambda by_meta: (by_meta[2]["file_path"], int(by_meta[2]["chunk_index"]))
+        )
+
+        final_results = {
+            "documents": [[result[0] for result in sorted_results]],
+            "ids": [[result[1] for result in sorted_results]],
+            "metadatas": [[result[2] for result in sorted_results]]
+        }
+
+        retrieved_context = ""
         if final_results['documents'] and final_results['documents'][0]:
             for i, doc in enumerate(final_results['documents'][0]):
                 file_id = final_results['ids'][0][i]
@@ -150,16 +201,18 @@ class AgenticRAGService:
 
     # Semantic Search
 
+    def _keyword_semantic_hybrid_search(self, collection, keyword_index, query, top_k=3, vendor_filter=None):
+        vector_results = self._query_document_embeddings(collection, query, top_k, vendor_filter)
+        keyword_results = self._query_keyword_index(collection, keyword_index, query, top_k, vendor_filter)
+        combined_results = self._reciprocal_rank_fusion(vector_results, keyword_results, top_k)
+        return self._retrieve_relevant_context(combined_results, collection) if combined_results else None
+
     def search_rowdy25(self, query):
-        return self._query_document_embeddings(self.code_collection, self.embedding_model.encode([query]).tolist())
+        return self._keyword_semantic_hybrid_search(self.code_collection, self.bm25_code, query)
 
     def search_external_docs(self, query, top_k=3, vendor_filter=None):
-        return self._query_document_embeddings(
-            self.external_docs_collection,
-            self.embedding_model.encode([query]).tolist(),
-            top_k,
-            vendor_filter
-        )
+        return self._keyword_semantic_hybrid_search(self.external_docs_collection, self.bm25_external_docs,
+                                                    query, top_k, vendor_filter)
 
     # Claude wrapper
 
@@ -239,7 +292,21 @@ class AgenticRAGService:
                 tool_results = []
                 for tool_block in tool_blocks:
                     if tool_block and tool_block.name == "search_external_docs":
-                        tool_result = self.search_external_docs(tool_block.input["query"])
+                        query = tool_block.input.get("query")
+                        top_k = tool_block.input.get("top_k", 3)
+                        vendor_filter = tool_block.input.get("vendor_filter")
+
+                        if not isinstance(query, str):
+                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                        else:
+                            if not isinstance(top_k, int):
+                                top_k = 3
+
+                            if not isinstance(vendor_filter, list):
+                                vendor_filter = None
+                            else:
+                                vendor_filter = [vendor for vendor in vendor_filter if isinstance(vendor, str)]
+                            tool_result = self.search_external_docs(query, top_k, vendor_filter)
                         print(f"Extracted documentation:\n{tool_result}\n\n")
                         tool_results.append({
                             "type": "tool_result",
