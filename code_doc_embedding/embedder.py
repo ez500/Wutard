@@ -138,7 +138,8 @@ def build_external_docs_vector_database(documents, ids, metadatas):
             ids=cleaned_ids
         )
 
-        vendor_name = cleaned_metadatas[0].split("/", 1)[0]
+        source = cleaned_metadatas[0].get("source")
+        vendor_name = source.split("/", 1)[0] if source else cleaned_metadatas[0].get("vendor", "unknown")
         print(f"Completed embedding for {len(cleaned_documents)} files to ./db/{collection.id} for "
               f"{vendor_name} external vendor")
     else:
