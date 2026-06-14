@@ -24,10 +24,3 @@ class Programming(commands.Cog):
 
 async def setup(client):
     await client.add_cog(Programming(client, AgenticRAGService()))
-
-
-if __name__ == "__main__":
-    test = Programming(None, None)
-    # context = test.rag_service.search_rowdy25("What does RobotStates do?")
-    context = test.rag_service.search_rowdy25("How does the robot path find around the reef using commands?")
-    print(context)

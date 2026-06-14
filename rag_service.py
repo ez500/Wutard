@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 from typing import Any
@@ -129,15 +130,16 @@ class AgenticRAGService:
         return top_final_ids if top_final_ids else ["No relevant results found"]
 
     @staticmethod
-    def _retrieve_relevant_context(initial_result_ids, collection):
-        initial_results = collection.get(ids=initial_result_ids)
-        result_metadatas = initial_results["metadatas"]
+    def _retrieve_relevant_context(init_result_ids, collection):
+        init_results = collection.get(ids=init_result_ids)
+        init_result_docs = init_results.get("documents") or []
+        init_result_metadatas = init_results.get("metadatas") or []
 
-        if not result_metadatas or result_metadatas[0]:
-            return "\n\n".join(initial_results.get("documents", []))
+        if not init_result_metadatas:
+            return "\n\n".join(init_result_docs) if init_result_docs else "No relevant results found"
 
         results_by_file = {}
-        for metadata in result_metadatas[0]:
+        for metadata in init_result_metadatas:
             if not metadata:
                 continue
 
@@ -153,6 +155,9 @@ class AgenticRAGService:
                 results_by_file[file_path] = set()
 
             results_by_file[file_path].update([max(0, chunk_idx - 1), chunk_idx, chunk_idx + 1])
+
+        if not results_by_file:
+            return "\n\n".join(init_result_docs) if init_result_docs else "No relevant results found"
 
         or_conditions = [
             {
@@ -171,48 +176,46 @@ class AgenticRAGService:
         expanded_ids = expanded_results["ids"] or []
         expanded_metadatas = expanded_results["metadatas"] or []
 
-        zipped_results = zip(
-            expanded_documents,
-            expanded_ids,
-            expanded_metadatas
-        )
-
         sorted_results = sorted(
-            zipped_results,
-            key=lambda by_meta: (by_meta[2]["file_path"], int(by_meta[2]["chunk_index"]))
+            zip(expanded_documents, expanded_ids, expanded_metadatas),
+            key=lambda result: (
+                str(result[2].get("file_path", "")),
+                int(result[2].get("chunk_index") or 0)
+            )
         )
-
-        final_results = {
-            "documents": [[result[0] for result in sorted_results]],
-            "ids": [[result[1] for result in sorted_results]],
-            "metadatas": [[result[2] for result in sorted_results]]
-        }
 
         retrieved_context = ""
-        if final_results['documents'] and final_results['documents'][0]:
-            for i, doc in enumerate(final_results['documents'][0]):
-                file_id = final_results['ids'][0][i]
-                source = final_results['metadatas'][0][i].get('source', 'Unknown')
-
-                retrieved_context += f"\n--- Start of snippet {file_id} (from {source}) ---\n"
-                retrieved_context += doc
-                retrieved_context += "\n--- End of snippet ---\n"
-        return retrieved_context if retrieved_context else "No relevant documentation found"
+        for document, doc_id, metadata in sorted_results:
+            source = metadata.get("source", "Unknown")
+            retrieved_context += f"\n--- Start of snippet {doc_id} (from {source}) ---\n"
+            retrieved_context += document
+            retrieved_context += "\n--- End of snippet ---\n"
+        return retrieved_context if retrieved_context else "No relevant results found"
 
     # Semantic Search
+
+    def _strict_semantic_search(self, collection, query, top_k=3, vendor_filter=None):
+        return self._retrieve_relevant_context(
+            self._query_document_embeddings(collection, query, top_k, vendor_filter),
+            collection
+        )
 
     def _keyword_semantic_hybrid_search(self, collection, keyword_index, query, top_k=3, vendor_filter=None):
         vector_results = self._query_document_embeddings(collection, query, top_k, vendor_filter)
         keyword_results = self._query_keyword_index(collection, keyword_index, query, top_k, vendor_filter)
         combined_results = self._reciprocal_rank_fusion(vector_results, keyword_results, top_k)
-        return self._retrieve_relevant_context(combined_results, collection) if combined_results else None
+        return self._retrieve_relevant_context(combined_results, collection)
 
-    def search_rowdy25(self, query):
-        return self._keyword_semantic_hybrid_search(self.code_collection, self.bm25_code, query)
+    def search_rowdy25(self, query, top_k=3, hybrid=True):
+        if hybrid:
+            return self._keyword_semantic_hybrid_search(self.code_collection, self.bm25_code, query, top_k)
+        return self._strict_semantic_search(self.code_collection, query, top_k)
 
-    def search_external_docs(self, query, top_k=3, vendor_filter=None):
-        return self._keyword_semantic_hybrid_search(self.external_docs_collection, self.bm25_external_docs,
-                                                    query, top_k, vendor_filter)
+    def search_external_docs(self, query, top_k=3, vendor_filter=None, hybrid=True):
+        if hybrid:
+            return self._keyword_semantic_hybrid_search(self.external_docs_collection, self.bm25_external_docs,
+                                                        query, top_k, vendor_filter)
+        return self._strict_semantic_search(self.external_docs_collection, query, top_k, vendor_filter)
 
     # Claude wrapper
 
@@ -220,49 +223,141 @@ class AgenticRAGService:
         # TODO: RUN THE FIRST CHECK OF RELEVANCE + ONE QUESTION ONLY
         pass
 
+    async def _retrieve_robot_code_context(self, user_query):
+        system_prompt = (f"You are a research assistant. Analyze the user query and generate a list of 3 precise "
+                         f"technical search queries for a code search engine. Respond in the form '[query1, query2, "
+                         f"query3]', and limit your queries to less than 6 words per query. "
+                         f"Here is the list of classes that might be useful to include in your queries: "
+                         f"RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                         f"PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, WristCommand, "
+                         f"PivotCommand, SearchForObjectCommand, FollowPathRequiringAlgaeCommand, Lights, Localizer, "
+                         f"LocalizerSim, LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
+                         f"Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, SwerveTelemetry, "
+                         f"RobotIdentity, RobotPoses, Constants, CompConstants, TestConstants, DefaultConstants, "
+                         f"SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
+                         f"LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, GravityGainsCalculator, "
+                         f"MacAddress, RotationUtil, MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                         f"AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, Robot. "
+                         f"Use prefix 'class' for your query if a particular Java "
+                         f"class is mentioned or is very obviously what the user is asking about.")
+
+        message: list[MessageParam] = [{"role": "user", "content": user_query}]
+        response = await self.claude_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            system=system_prompt,
+            messages=message
+        )
+
+        text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
+        if text_block:
+            print(text_block.text)
+            return self.search_rowdy25(text_block.text)
+        else:
+            return "No relevant results found"
+
     async def run_agentic_query(self, user_query):
         # TODO: CREATE CONVERSATION HISTORY
-        system_prompt = (f"You are an expert FRC programmer. Answer the user's question concisely using the "
-                         f"following snippets from our team's codebase: "
-                         f"{self.search_rowdy25(user_query)}")
+        system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely. Use the tools "
+                         "made available to you to answer questions about the codebase, hardware, and API details. "
+                         "For searching Rowdy25 code, you must generate your own 3 precise technical search queries "
+                         "for the string query argument that is in the form '[query1, query2, query3]', with each "
+                         "query limited to less than 6 words per query. "
+                         "Here is the list of classes that might be useful to include in your queries: "
+                         "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                         "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, WristCommand, "
+                         "PivotCommand, SearchForObjectCommand, FollowPathRequiringAlgaeCommand, Lights, Localizer, "
+                         "LocalizerSim, LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
+                         "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, SwerveTelemetry, "
+                         "RobotIdentity, RobotPoses, Constants, CompConstants, TestConstants, DefaultConstants, "
+                         "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
+                         "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, GravityGainsCalculator, "
+                         "MacAddress, RotationUtil, MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                         "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, Robot. "
+                         "Use prefix 'class' for your query if a particular Java "
+                         "class is mentioned or is very obviously what the user is asking about.")
 
-        tool_schema: list[ToolParam] = [{
-            "name": "search_external_docs",
-            "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
-                           "specific API details, hardware characteristics, framework constraints, etc.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "The number of document chunks (results) to return, depending on how large or "
-                                       "broad in scope the query is. Use 1-3 for specific API checks, 3-6 for "
-                                       "standard queries, and 6-8 for broad conceptual questions.",
-                        "minimum": 1,
-                        "maximum": 8
-                    },
-                    "vendor_filter": {
-                        "type": "array",
-                        "items": {
+        tool_schema: list[ToolParam] = [
+            {
+                "name": "search_rowdy25",
+                "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
+                               "certain implementation details, such as how a certain feature of the robot works, "
+                               "or how a specific command is built.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
                             "type": "string",
-                            "enum": ["WPILib", "DogLog", "PhotonLib", "Phoenix6", "PathPlanner", "REVLib", "ReduxLib"]
+                            "description": "The string query argument that is in the form '[query1, query2, query3]', "
+                                           "with each query limited to less than 6 words per query. Here is the list "
+                                           "of classes that might be useful to include in the queries: "
+                                           "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                                           "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
+                                           "WristCommand, PivotCommand, SearchForObjectCommand, "
+                                           "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
+                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
+                                           "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, "
+                                           "SwerveTelemetry, RobotIdentity, RobotPoses, Constants, CompConstants, "
+                                           "TestConstants, DefaultConstants, SimConstants, "
+                                           "PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
+                                           "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, "
+                                           "GravityGainsCalculator, MacAddress, RotationUtil, MultipleChooser, "
+                                           "ProfiledExpEndController, FieldUtil, SysID, AutoTrigger, AutoEventLooper, "
+                                           "AutoManager, Pathfinder, RobotStates, Robot. "
+                                           "Use prefix 'class' for a query if a particular Java "
+                                           "class is mentioned or is very obviously what the user is asking about."
                         },
-                        "description": "Optional list of vendors to search by. Leave empty to search all vendors."}
+                        "top_k": {
+                            "type": "integer",
+                            "description": "The number of document chunks (results) to return, depending on how large "
+                                           "or broad in scope the query is. Use 1-3 for specific API checks, 3-6 for "
+                                           "standard queries, and 6-8 for broad conceptual questions.",
+                            "minimum": 1,
+                            "maximum": 8
+                        },
+                    },
+                    "required": ["query"]
                 },
-                "required": ["query"]
+            },
+            {
+                "name": "search_external_docs",
+                "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
+                               "specific API details, hardware characteristics, framework constraints, etc.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "The number of document chunks (results) to return, depending on how large "
+                                           "or broad in scope the query is. Use 1-3 for specific API checks, 3-6 for "
+                                           "standard queries, and 6-8 for broad conceptual questions.",
+                            "minimum": 1,
+                            "maximum": 8
+                        },
+                        "vendor_filter": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["WPILib", "DogLog", "PhotonLib", "Phoenix6", "PathPlanner",
+                                         "REVLib", "ReduxLib"]
+                            },
+                            "description": "Optional list of vendors to search by. Leave empty to search all vendors."}
+                    },
+                    "required": ["query"]
+                }
             }
-        }]
+        ]
 
         conversation_history: list[MessageParam] = [{"role": "user", "content": user_query}]
 
         while True:
             print("Sending prompt to Claude...")
             response = await self.claude_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=2048,
                 tools=tool_schema,
                 system=system_prompt,
@@ -291,6 +386,23 @@ class AgenticRAGService:
                 tool_blocks = [block for block in response.content if isinstance(block, ToolUseBlock)]
                 tool_results = []
                 for tool_block in tool_blocks:
+                    if tool_block and tool_block.name == "search_rowdy25":
+                        query = tool_block.input.get("query")
+                        top_k = tool_block.input.get("top_k", 3)
+
+                        if not isinstance(query, str):
+                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                        else:
+                            if not isinstance(top_k, int):
+                                top_k = 3
+                            tool_result = self.search_rowdy25(query, top_k)
+                        print(f"Extracted documentation:\n{tool_result}\n\n")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_block.id,
+                            "content": tool_result
+                        })
+
                     if tool_block and tool_block.name == "search_external_docs":
                         query = tool_block.input.get("query")
                         top_k = tool_block.input.get("top_k", 3)
@@ -313,5 +425,16 @@ class AgenticRAGService:
                             "tool_use_id": tool_block.id,
                             "content": tool_result
                         })
-
                 conversation_history.append({"role": "user", "content": tool_results})
+
+
+if __name__ == "__main__":
+    test = AgenticRAGService()
+    # context = asyncio.run(test.search_rowdy25("What does RobotStates do?"))
+    # context = asyncio.run(test.run_agentic_query(
+    #     "How does the robot pathfind avoiding the reef using commands?"
+    # ))
+    context = asyncio.run(test.run_agentic_query(
+        "What exactly does the SameSide method calculate when pathfinding avoiding the reef?"
+    ))
+    print(context)
