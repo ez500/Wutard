@@ -40,7 +40,7 @@ class AgenticRAGService:
         self.bm25_code, self.code_ids = self._build_bm25_index(self.code_collection)
         self.bm25_external_docs, self.external_docs_ids = self._build_bm25_index(self.external_docs_collection)
 
-        print("Agentic RAG setup complete.")
+        print("Agentic RAG setup complete.\n\n")
 
     # Internal Helpers
 
@@ -63,9 +63,9 @@ class AgenticRAGService:
         where_clause = None
         if vendor_filter:
             if len(vendor_filter) == 1:
-                where_clause = {"source": {"$contains": vendor_filter[0]}}
+                where_clause = {"vendor": vendor_filter[0]}
             else:
-                where_clause = {"$or": [{"source": {"$contains": vendor}} for vendor in vendor_filter]}
+                where_clause = {"$or": [{"vendor": vendor} for vendor in vendor_filter]}
 
         query_kwargs: dict[str, Any] = {"query_embeddings": query_embedding, "n_results": min(top_k, 8), }
 
@@ -92,14 +92,22 @@ class AgenticRAGService:
         where_clause = None
         if vendor_filter:
             if len(vendor_filter) == 1:
-                where_clause = {"source": {"$contains": vendor_filter[0]}}
+                where_clause = {"vendor": vendor_filter[0]}
             else:
-                where_clause = {"$or": [{"source": {"$contains": vendor}} for vendor in vendor_filter]}
+                where_clause = {"$or": [{"vendor": vendor} for vendor in vendor_filter]}
 
         tokenized_query = self._tokenize_code(query)
         bm25_scores = keyword_index.get_scores(tokenized_query)
 
         keyword_hits = []
+
+        collection_ids = collection.get().get("ids", [])
+        if len(bm25_scores) != len(collection_ids):
+            raise ValueError(
+                "Keyword index and collection IDs are out of sync: "
+                f"BM25 has {len(bm25_scores)} documents, but collection has {len(collection_ids)} IDs. "
+                "Rebuild the BM25 index from the same documents and IDs as this Chroma collection."
+            )
 
         allowed_ids = set()
         if where_clause:
@@ -107,7 +115,7 @@ class AgenticRAGService:
 
         top_indices = np.argsort(bm25_scores)[::-1]
         for idx in top_indices:
-            doc_id = self.code_ids[idx]
+            doc_id = collection_ids[idx]
             if where_clause and doc_id not in allowed_ids:
                 continue
             keyword_hits.append(doc_id)
@@ -127,16 +135,20 @@ class AgenticRAGService:
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + (1 / (k + rank))
         ranked_doc_ids = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         top_final_ids = [doc_id for doc_id, _ in ranked_doc_ids[:top_k]]
-        return top_final_ids if top_final_ids else ["No relevant results found"]
+        if not top_final_ids:
+            print("Reciprocal ranking of IDs returned nothing\n")
+            return []
+        return top_final_ids
 
     @staticmethod
     def _retrieve_relevant_context(init_result_ids, collection):
+        print(f"Initial result IDs passed to context retrieval: {init_result_ids}\n")
         init_results = collection.get(ids=init_result_ids)
         init_result_docs = init_results.get("documents") or []
         init_result_metadatas = init_results.get("metadatas") or []
 
         if not init_result_metadatas:
-            return "\n\n".join(init_result_docs) if init_result_docs else "No relevant results found"
+            return "\n\n".join(init_result_docs) if init_result_docs else "No relevant results found 1"
 
         results_by_file = {}
         for metadata in init_result_metadatas:
@@ -157,7 +169,7 @@ class AgenticRAGService:
             results_by_file[file_path].update([max(0, chunk_idx - 1), chunk_idx, chunk_idx + 1])
 
         if not results_by_file:
-            return "\n\n".join(init_result_docs) if init_result_docs else "No relevant results found"
+            return "\n\n".join(init_result_docs) if init_result_docs else "No relevant results found 2"
 
         or_conditions = [
             {
@@ -190,7 +202,7 @@ class AgenticRAGService:
             retrieved_context += f"\n--- Start of snippet {doc_id} (from {source}) ---\n"
             retrieved_context += document
             retrieved_context += "\n--- End of snippet ---\n"
-        return retrieved_context if retrieved_context else "No relevant results found"
+        return retrieved_context if retrieved_context else "No relevant results found 3"
 
     # Semantic Search
 
@@ -204,6 +216,11 @@ class AgenticRAGService:
         vector_results = self._query_document_embeddings(collection, query, top_k, vendor_filter)
         keyword_results = self._query_keyword_index(collection, keyword_index, query, top_k, vendor_filter)
         combined_results = self._reciprocal_rank_fusion(vector_results, keyword_results, top_k)
+
+        print(f"Vector results: {vector_results}")
+        print(f"Keyword results: {keyword_results}")
+        print(f"Combined results: {combined_results}\n")
+
         return self._retrieve_relevant_context(combined_results, collection)
 
     def search_rowdy25(self, query, top_k=3, hybrid=True):
@@ -345,8 +362,8 @@ class AgenticRAGService:
                             "type": "array",
                             "items": {
                                 "type": "string",
-                                "enum": ["WPILib", "DogLog", "PhotonLib", "Phoenix6", "PathPlanner",
-                                         "REVLib", "ReduxLib"]
+                                "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
+                                         "revlib", "reduxlib"]
                             },
                             "description": "Optional list of vendors to search by. Leave empty to search all vendors."}
                     },
@@ -358,7 +375,7 @@ class AgenticRAGService:
         conversation_history: list[MessageParam] = [{"role": "user", "content": user_query}]
 
         while True:
-            print("Sending prompt to Claude...")
+            print("Sending prompt to Claude...\n")
             response = await self.claude_client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=2048,
@@ -383,7 +400,7 @@ class AgenticRAGService:
                     return "I'm sorry, you're going to have to ask Geeson over there. That's life!"
 
             if response.stop_reason == "tool_use":
-                print(f"External documentation required, deploying retrieval")
+                print(f"External documentation required, deploying retrieval\n")
                 conversation_history.append({"role": "assistant", "content": response.content})
 
                 tool_blocks = [block for block in response.content if isinstance(block, ToolUseBlock)]
@@ -428,11 +445,11 @@ class AgenticRAGService:
                             else:
                                 vendor_filter = [vendor for vendor in vendor_filter if isinstance(vendor, str)]
                             tool_result = self.search_external_docs(query, top_k, vendor_filter)
-                            print(f"\nSearching for Rowdy25 docs!\n"
+                            print(f"\nSearching for external docs!\n"
                                   f"Query: {query}\n"
                                   f"Top K results (order of context): {top_k}\n"
                                   f"Vendor filter: {vendor_filter if vendor_filter else "All"}\n"
-                                  f"Extracted Rowdy25 material:\n"
+                                  f"Extracted external docs material:\n"
                                   f"{tool_result}\n\n")
                         tool_results.append({
                             "type": "tool_result",
@@ -444,18 +461,21 @@ class AgenticRAGService:
 
 if __name__ == "__main__":
     test = AgenticRAGService()
-    # robot_context = asyncio.run(test.search_rowdy25("What does RobotStates do?")) # BAD (13 cents)
+    # robot_context = asyncio.run(test.search_rowdy25("What does RobotStates do?"))  # BAD (13 cents)
     # robot_context = asyncio.run(test.run_agentic_query(
-    #     "How does the robot pathfind avoiding the reef using commands?" # BAD (8 cents)
+    #     "How does the robot pathfind avoiding the reef using commands?"  # BAD (8 cents)
     # ))
-    # robot_context = asyncio.run(test.run_agentic_query( # ACCEPTABLE (6 cents)
+    # robot_context = asyncio.run(test.run_agentic_query(  # ACCEPTABLE (6 cents)
     #     "Can you clarify what the SameSide method calculates when pathfinding avoiding the reef?"
     # ))
     # robot_context = asyncio.run(test.run_agentic_query(
-    #     "What does two convenience composites mean for fields atReefAlgaeState and atAutoScoreState?" # GOOD (1 cent)
+    #     "What does two convenience composites mean for fields atReefAlgaeState and atAutoScoreState?"  # GOOD (1 cent)
     # ))
     # print(robot_context)
+    # docs_context = asyncio.run(test.run_agentic_query(
+    #     "What is different between PathPlanner PID and WPILib PID?"  # GOOD (1 cent)
+    # ))
     docs_context = asyncio.run(test.run_agentic_query(
-        "What is different between PathPlanner PID and WPILib PID?"
+        "What's the difference between MotionMagicExpo and MotionMagic?"  # GOOD (2 cents)
     ))
     print(docs_context)

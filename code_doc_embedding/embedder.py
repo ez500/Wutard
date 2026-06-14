@@ -7,6 +7,14 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from sentence_transformers import SentenceTransformer
 
 
+def normalize_metadata_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
 def build_robot_code_vector_database():
     model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
     model.max_seq_length = 2048
@@ -72,12 +80,12 @@ def build_robot_code_vector_database():
                             documents.append(split.page_content)
                             ids.append(f"rowdy25_{file_count}_{file_path}_chunk_{idx}")
                             metadatas.append({
+                                **split.metadata,
                                 "source": f"Rowdy25/{filename}",
                                 "file_path": file_path,
                                 "filename": filename,
                                 "chunk_index": idx,
                                 "extension": ".md",
-                                **split.metadata,
                             })
                         file_count += 1
 
@@ -121,7 +129,7 @@ def build_external_docs_vector_database(documents, ids, metadatas):
             }
 
             normalized_metadata = {
-                key: str(value) if value is not None else "" for key, value in normalized_metadata.items()
+                key: normalize_metadata_value(value) for key, value in normalized_metadata.items()
             }
 
             cleaned_documents.append(document)
@@ -175,11 +183,11 @@ def build_wpilib_vector_database():
                             documents.append(split.page_content)
                             ids.append(f"wpilib_{file_count}_{file_path}_chunk_{idx}")
                             metadatas.append({
+                                **split.metadata,
                                 "source": f"WPILib/{filename}",
                                 "file_path": file_path,
                                 "filename": filename,
                                 "chunk_index": idx,
-                                **split.metadata,
                             })
                         file_count += 1
 
@@ -213,11 +221,11 @@ def build_doglog_vector_database():
                             documents.append(split.page_content)
                             ids.append(f"doglog_{file_count}_{file_path}_chunk_{idx}")
                             metadatas.append({
+                                **split.metadata,
                                 "source": f"DogLog/{filename}",
                                 "file_path": file_path,
                                 "filename": filename,
                                 "chunk_index": idx,
-                                **split.metadata,
                             })
                         file_count += 1
 
@@ -251,11 +259,11 @@ def build_photonlib_vector_database():
                             documents.append(split.page_content)
                             ids.append(f"photonlib_{file_count}_{file_path}_chunk_{idx}")
                             metadatas.append({
+                                **split.metadata,
                                 "source": f"PhotonLib/{filename}",
                                 "file_path": file_path,
                                 "filename": filename,
                                 "chunk_index": idx,
-                                **split.metadata,
                             })
                         file_count += 1
 
@@ -335,11 +343,11 @@ def build_pathplanner_vector_database():
                             documents.append(split.page_content)
                             ids.append(f"pathplanner_{file_count}_{file_path}_chunk_{idx}")
                             metadatas.append({
+                                **split.metadata,
                                 "source": f"PathPlanner/{filename}",
                                 "file_path": file_path,
                                 "filename": filename,
                                 "chunk_index": idx,
-                                **split.metadata,
                             })
                         file_count += 1
 
@@ -391,8 +399,8 @@ def build_revlib_vector_database():
                 documents.append(split)
                 ids.append(f"revlib_{file_count}_{doc.metadata['source']}_chunk_{idx}")
                 metadatas.append({
-                    "source": f"REVLib/{doc.metadata['source']}",
-                    "file_path": {doc.metadata['source']},
+                    "source": f"REVLib",
+                    "file_path": doc.metadata['source'],
                     "chunk_index": idx,
                 })
         file_count += 1
@@ -426,8 +434,8 @@ def build_reduxlib_vector_database():
                 documents.append(split)
                 ids.append(f"reduxlib_{file_count}_{doc.metadata['source']}_chunk_{idx}")
                 metadatas.append({
-                    "source": f"ReduxLib/{doc.metadata['source']}",
-                    "file_path": {doc.metadata['source']},
+                    "source": f"ReduxLib",
+                    "file_path": doc.metadata['source'],
                     "chunk_index": idx,
                 })
         file_count += 1
