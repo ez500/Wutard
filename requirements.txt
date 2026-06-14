@@ -6,3 +6,4 @@ langchain-community~=0.4.2
 langchain-text-splitters~=1.1.2
 sentence-transformers~=5.5.1
 anthropic~=0.109.1
+rank-bm25
