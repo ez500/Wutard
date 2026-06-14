@@ -13,12 +13,68 @@ with open('claude_key', 'r') as f:
     api_key = f.readline().strip()
 
 
-def retrieve_relevant_context(results):
+def retrieve_relevant_context(initial_results, collection):
+    final_results = {}
     retrieved_context = ""
-    if results['documents'] and results['documents'][0]:
-        for i, doc in enumerate(results['documents'][0]):
-            file_id = results['ids'][0][i]
-            source = results['metadatas'][0][i].get('source', 'Unknown')
+
+    result_metadatas = initial_results["metadatas"]
+    if result_metadatas and result_metadatas[0]:
+        results_by_file = {}
+        for metadata in result_metadatas[0]:
+            if not metadata:
+                continue
+
+            file_path = metadata.get("file_path")
+            chunk_idx = metadata.get("chunk_index")
+            if not isinstance(file_path, str):
+                continue
+            if not isinstance(chunk_idx, (str, int)) or isinstance(chunk_idx, bool):
+                continue
+            chunk_idx = int(chunk_idx)
+
+            if file_path not in results_by_file:
+                results_by_file[file_path] = set()
+
+            results_by_file[file_path].update([max(0, chunk_idx - 1), chunk_idx, chunk_idx + 1])
+
+        or_conditions = [
+            {
+                "$and": [
+                    {"file_path": file_path},
+                    {"chunk_index": {"$in": list(chunk_indices)}}
+                ]
+            }
+            for file_path, chunk_indices in results_by_file.items()
+        ]
+
+        where_clause = or_conditions[0] if len(or_conditions) == 1 else {"$or": or_conditions}
+
+        expanded_results = collection.get(where=where_clause)
+        expanded_documents = expanded_results["documents"] or []
+        expanded_ids = expanded_results["ids"] or []
+        expanded_metadatas = expanded_results["metadatas"] or []
+
+        zipped_results = zip(
+            expanded_documents,
+            expanded_ids,
+            expanded_metadatas
+        )
+
+        sorted_results = sorted(
+            zipped_results,
+            key=lambda by_meta: (by_meta[2]["file_path"], int(by_meta[2]["chunk_index"]))
+        )
+
+        final_results = {
+            "ids": [[result[0] for result in sorted_results]],
+            "documents": [[result[1] for result in sorted_results]],
+            "metadatas": [[result[2] for result in sorted_results]]
+        }
+
+    if final_results['documents'] and final_results['documents'][0]:
+        for i, doc in enumerate(final_results['documents'][0]):
+            file_id = final_results['ids'][0][i]
+            source = final_results['metadatas'][0][i].get('source', 'Unknown')
 
             retrieved_context += f"\n--- Start of snippet {file_id} (from {source}) ---\n"
             retrieved_context += doc
@@ -42,7 +98,7 @@ class Programming(commands.Cog):
 
         self.claude_client = anthropic.Anthropic(api_key=api_key)
 
-    def search_code_rag(self, query, top_k=3):
+    def search_code_rag(self, query, top_k=5):
         query_embedding = self.embedding_model.encode([query]).tolist()
 
         try:
@@ -52,7 +108,7 @@ class Programming(commands.Cog):
                 "Local Chroma vector database index could not be loaded. Usually this means './code_doc_embedding/db' "
                 "is corrupted or was created with an incompatible Chroma version. Stop the bot, move the database (db) "
                 "to a backup location, and rebuild it using code_doc_embedding/embedder.py.")
-        return retrieve_relevant_context(results)
+        return retrieve_relevant_context(results, self.code_collection)
 
     def search_external_docs_rag(self, query, top_k=3, vendor_filter=None):
         query_embedding = self.embedding_model.encode([query]).tolist()
@@ -77,7 +133,7 @@ class Programming(commands.Cog):
                 "Local Chroma vector database index could not be loaded. Usually this means './code_doc_embedding/db' "
                 "is corrupted or was created with an incompatible Chroma version. Stop the bot, move the database (db) "
                 "to a backup location, and rebuild it using code_doc_embedding/embedder.py.")
-        return retrieve_relevant_context(results)
+        return retrieve_relevant_context(results, self.external_docs_collection)
 
     def system_guardrail(self, user_query):
         # TODO: RUN THE FIRST CHECK OF RELEVANCE + ONE QUESTION ONLY
