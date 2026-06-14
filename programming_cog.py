@@ -19,7 +19,9 @@ class Programming(commands.Cog):
             return
 
         if message.channel.id == 1292666640256991282 or message.channel.id == 1013977098370699305:
-            await message.channel.send(self.rag_service.run_agentic_query(message.content))
+            response = await self.rag_service.system_guardrail(message.content)
+            print(response)
+            await message.channel.send(response)
 
 
 async def setup(client):

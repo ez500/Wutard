@@ -237,8 +237,35 @@ class AgenticRAGService:
     # Claude wrapper
 
     async def system_guardrail(self, user_query):
-        # TODO: RUN THE FIRST CHECK OF RELEVANCE + ONE QUESTION ONLY
-        pass
+        system_prompt = ("You are an FRC WPILib assistant. Evaluate the following user query. If it is not explicitly "
+                         "related to WPILib, FRC, and robotics programming, output exactly 'OUT_OF_SCOPE' and nothing "
+                         "else. If it is more than one question, output exactly 'TOO_MANY_QUESTIONS' and nothing else. "
+                         "If it is a trivial question, output exactly 'TRIVIAL' and nothing else. Otherwise, output "
+                         "'GOOD' and nothing else.")
+
+        message: list[MessageParam] = [{"role": "user", "content": user_query}]
+        response = await self.claude_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            system=system_prompt,
+            messages=message
+        )
+
+        text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
+        if text_block:
+            output_code = text_block.text
+            print(output_code + "\n")
+            if output_code == 'OUT_OF_SCOPE' or output_code == 'TRIVIAL':
+                return "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+            elif output_code == 'TOO_MANY_QUESTIONS':
+                return "I'm sorry, I can't answer that. I can only answer a single question at a time. That's life!"
+            elif output_code == 'GOOD':
+                return await self.run_agentic_query(user_query)
+            else:
+                return ("I'm sorry, you're going to have to ask Geeson over there. That's life! "
+                        f"Error code: {output_code}")
+        else:
+            return "Query error. Please try again later."
 
     async def _retrieve_robot_code_context(self, user_query):
         system_prompt = (f"You are a research assistant. Analyze the user query and generate a list of 3 precise "
