@@ -60,6 +60,10 @@ class Programming(commands.Cog):
         pass
 
     def run_agentic_query(self, user_query):
+        # TODO: CREATE CONVERSATION HISTORY
+        # TODO: PARALLEL + SEQUENTIAL TOOL USE CASES
+        conversation_history: list[MessageParam] = [{"role": "user", "content": user_query}]
+
         system_prompt = (f"You are an expert FRC programmer. Answer the user's question concisely using the "
                          f"following snippets from our team's codebase: "
                          f"{self.search_code_rag(user_query)}")
@@ -95,18 +99,13 @@ class Programming(commands.Cog):
             }
         }]
 
-        messages: list[MessageParam] = [
-            {"role": "user", "content": ("I am writing code for our FRC robot. Why might our CANSparkMax be "
-                                         "stuttering? What are its current limits?")}
-        ]
-
         print("Sending prompt to Claude")
         response = self.claude_client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=2048,
             tools=tool_schema,
             system=system_prompt,
-            messages=messages
+            messages=conversation_history
         )
 
         if response.stop_reason == "tool_use":
@@ -119,9 +118,18 @@ class Programming(commands.Cog):
                 tool_result = self.search_code_rag(query_arg)
                 print(f"Extracted documentation: {tool_result}")
 
-    @commands.hybrid_command(name="test", help="Responds with a test message.")
-    async def test(self, ctx):
-        await ctx.send("Test message.")
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        client_user = self.client.user
+        if client_user is None:
+            return
+        if message.author == client_user:
+            return
+        if message.author.bot:
+            return
+
+        if message.channel.id == 1292666640256991282 or message.channel.id == 1013977098370699305:
+            message.channel.send("Hello!")
 
 
 async def setup(client):

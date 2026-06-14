@@ -16,7 +16,7 @@ class WutardBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(
-            command_prefix=commands.when_mentioned_or('super '),
+            command_prefix='super ',
             help_command=None,
             intents=intents
         )
@@ -30,34 +30,37 @@ class WutardBot(commands.Bot):
         super_every_day.start()
 
 
-    async def on_ready(self):
-        await client.change_presence(status=discord.Status.idle, activity=discord.Game(name='Ahh..Super!'))
-        print('Logged in')
-
-
 client = WutardBot()
+
+
+@client.event
+async def on_ready():
+    await client.change_presence(status=discord.Status.idle, activity=discord.Game(name='Ahh..Super!'))
+    print('Logged in')
 
 
 @client.event
 async def on_guild_join(guild):
     channels = guild.channels
     for c in channels:
-        if c.type == discord.ChannelType.text:
-            channel = c.id
-            await client.get_channel(channel).send('Hello! How\'s it goin\'? I\'m Mr. Woodard, and I am your computer '
-                                                   'teacher. As the year begins, I lecture a lot, and as it goes on, I '
-                                                   'lecture a little. Everyone ready for the bell ringer? Ah, super!')
+        if isinstance(c, discord.TextChannel):
+            await c.send('Hello! How\'s it goin\'? I\'m Mr. Woodard, and I am your computer '
+                         'teacher. As the year begins, I lecture a lot, and as it goes on, I '
+                         'lecture a little. Everyone ready for the bell ringer? Ah, super!')
             break
 
 
 @client.event
 async def on_message(message):
-    if message.author == client.user:
+    client_user = client.user
+    if client_user is None:
         return
-    if message.author.client:
+    if message.author == client_user:
+        return
+    if message.author.bot:
         return
 
-    if client.user.mention in message.content:
+    if client_user and client_user.mention in message.content:
         if message.author.id == 597056424803303435:
             await message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
         else:
@@ -75,7 +78,7 @@ async def on_message(message):
         await message.channel.send('Ah, super!')
         return
     elif random.randint(0, 19) == 0:
-        if message.channel != 1013977098370699305:
+        if message.channel.id != 1013977098370699305:
             if random.randint(0, 5) == 0:
                 await message.channel.send('Ah, super!')
         else:
@@ -165,7 +168,7 @@ async def lecturetime(ctx):
 
 
 @client.hybrid_command(name='chinese', description='ask woodard if he knows anything foreign',
-                aliases=['foreignlanguage', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
+                       aliases=['foreignlanguage', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
 async def chinese(ctx):
     ethnicities = ['Chinese', 'Japanese', 'Korean', 'Vietnamese', 'Filipino', 'Indian', 'Thai', 'Indonesian', 'African',
                    'South American', 'Native American', 'Middle Eastern', 'Muslim', 'Black', 'Hispanic', 'Minority']
@@ -179,26 +182,27 @@ async def slides(ctx, *, msg: str):
     font = ImageFont.truetype('assets/verdana.ttf', 75)
     draw.text((100, 200), msg, fill=(255, 255, 255), font=font)
     image.save('_slides.png')
-    with open('_slides.png', 'rb') as f:
-        upload_image = discord.File(f, spoiler=False)
+    with open('_slides.png', 'rb') as image_f:
+        upload_image = discord.File(image_f, spoiler=False)
     await ctx.send(file=upload_image)
 
 
 @client.hybrid_command(name='calc1', description='ask woodard about his Calc 1 experience',
-                aliases=['calcone', 'calc', 'calculus'])
+                       aliases=['calcone', 'calc', 'calculus'])
 async def calc1(ctx):
     await ctx.send(
         'Ah, that\'s life. I took calc twice and failed, so I had to take it a third time. Third time\'s the charm! '
         'Ah, super.')
 
 
-@client.hybrid_command(name='gpa', description='ask woodard about his gpa in college', aliases=['collegegpa', 'gpaincollege'])
+@client.hybrid_command(name='gpa', description='ask woodard about his gpa in college',
+                       aliases=['collegegpa', 'gpaincollege'])
 async def gpa(ctx):
     await ctx.send('Ah, not super. When I started college, my GPA was in the points! That\'s life.')
 
 
 @client.hybrid_command(name='worksmart', description='woodard likes to work smart by self plagiarizing!',
-                aliases=['plagiarize', 'selfplagiarize'])
+                       aliases=['plagiarize', 'selfplagiarize'])
 async def worksmart(ctx):
     await ctx.send(
         'Ah, super! Remember to work smart, as I did in college, when I turned in a paper I had for an assignment in '
@@ -209,7 +213,9 @@ async def worksmart(ctx):
 @tasks.loop(time=datetime.time(hour=18, minute=30))
 async def super_every_day():
     await client.wait_until_ready()
-    await client.get_channel(1013977098370699305).send('Ah, super!')
+    channel = client.get_channel(1013977098370699305)
+    if isinstance(channel, discord.TextChannel):
+        await channel.send('Ah, super!')
 
 
 if __name__ == '__main__':
