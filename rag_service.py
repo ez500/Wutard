@@ -236,19 +236,22 @@ class AgenticRAGService:
 
     # Claude wrapper
 
-    async def system_guardrail(self, user_query):
+    async def continue_convo_with_system_guardrail(self, message_history):
         system_prompt = ("You are an FRC WPILib assistant. Evaluate the following user query. If it is not explicitly "
                          "related to WPILib, FRC, and robotics programming, output exactly 'OUT_OF_SCOPE' and nothing "
                          "else. If it is more than one question, output exactly 'TOO_MANY_QUESTIONS' and nothing else. "
+                         "If the conversation is going in a direction where you have to start implementing entire "
+                         "projects that require significant token usage (please be relatively conservative/strict), "
+                         "output exactly 'TOO_SPECIFIC' and nothing else. The idea is to try to keep it so "
+                         "you can conserve token usage and use less of it on generative coding."
                          "If it is a trivial question, output exactly 'TRIVIAL' and nothing else. Otherwise, output "
-                         "'GOOD' and nothing else.")
+                         "a short phrase that describes the user's intent (like a title of a chat).")
 
-        message: list[MessageParam] = [{"role": "user", "content": user_query}]
         response = await self.claude_client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=2048,
             system=system_prompt,
-            messages=message
+            messages=message_history
         )
 
         text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
@@ -256,16 +259,18 @@ class AgenticRAGService:
             output_code = text_block.text
             print(output_code + "\n")
             if output_code == 'OUT_OF_SCOPE' or output_code == 'TRIVIAL':
-                return "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+                return None, "I'm sorry, you're going to have to ask Geeson over there. That's life!"
             elif output_code == 'TOO_MANY_QUESTIONS':
-                return "I'm sorry, I can't answer that. I can only answer a single question at a time. That's life!"
-            elif output_code == 'GOOD':
-                return await self.run_agentic_query(user_query)
+                return None, "Sorry, I can't answer that. I can only answer a single question at a time. That's life!"
+            elif output_code == 'TOO_SPECIFIC':
+                return None, "Sorry, I can't help you cheat. Not super! That's life. Maybe ask Geeson."
             else:
-                return ("I'm sorry, you're going to have to ask Geeson over there. That's life! "
-                        f"Error code: {output_code}")
+                return output_code, await self.run_agentic_query(message_history)
         else:
-            return "Query error. Please try again later."
+            return None, "Query error. Please try again later."
+
+    async def register_query_with_system_guardrail(self, user_query):
+        return await self.continue_convo_with_system_guardrail([{"role": "user", "content": user_query}])
 
     async def _retrieve_robot_code_context(self, user_query):
         system_prompt = (f"You are a research assistant. Analyze the user query and generate a list of 3 precise "
@@ -300,8 +305,7 @@ class AgenticRAGService:
         else:
             return "No relevant results found"
 
-    async def run_agentic_query(self, user_query):
-        # TODO: CREATE CONVERSATION HISTORY
+    async def run_agentic_query(self, message_history):
         system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely (50 words). "
                          "The broader the question, the less specific you can be in your answer. "
                          "Only use each tool once. Do not strive for perfection. "
@@ -399,8 +403,6 @@ class AgenticRAGService:
             }
         ]
 
-        conversation_history: list[MessageParam] = [{"role": "user", "content": user_query}]
-
         while True:
             print("Sending prompt to Claude...\n")
             response = await self.claude_client.messages.create(
@@ -408,7 +410,7 @@ class AgenticRAGService:
                 max_tokens=2048,
                 tools=tool_schema,
                 system=system_prompt,
-                messages=conversation_history
+                messages=message_history
             )
 
             if response.stop_reason == "end_turn":
@@ -428,7 +430,7 @@ class AgenticRAGService:
 
             if response.stop_reason == "tool_use":
                 print(f"External documentation required, deploying retrieval\n")
-                conversation_history.append({"role": "assistant", "content": response.content})
+                message_history.append({"role": "assistant", "content": response.content})
 
                 tool_blocks = [block for block in response.content if isinstance(block, ToolUseBlock)]
                 tool_results = []
@@ -483,7 +485,7 @@ class AgenticRAGService:
                             "tool_use_id": tool_block.id,
                             "content": tool_result
                         })
-                conversation_history.append({"role": "user", "content": tool_results})
+                message_history.append({"role": "user", "content": tool_results})
 
 
 if __name__ == "__main__":
