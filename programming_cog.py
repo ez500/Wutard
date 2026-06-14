@@ -66,8 +66,8 @@ def retrieve_relevant_context(initial_results, collection):
         )
 
         final_results = {
-            "ids": [[result[0] for result in sorted_results]],
-            "documents": [[result[1] for result in sorted_results]],
+            "documents": [[result[0] for result in sorted_results]],
+            "ids": [[result[1] for result in sorted_results]],
             "metadatas": [[result[2] for result in sorted_results]]
         }
 

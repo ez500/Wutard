@@ -391,7 +391,7 @@ def build_revlib_vector_database():
                 documents.append(split)
                 ids.append(f"revlib_{file_count}_{doc.metadata['source']}_chunk_{idx}")
                 metadatas.append({
-                    "source": doc.metadata.get('source', "REVLib"),
+                    "source": f"REVLib/{doc.metadata['source']}",
                     "file_path": {doc.metadata['source']},
                     "chunk_index": idx,
                 })
@@ -426,7 +426,7 @@ def build_reduxlib_vector_database():
                 documents.append(split)
                 ids.append(f"reduxlib_{file_count}_{doc.metadata['source']}_chunk_{idx}")
                 metadatas.append({
-                    "source": doc.metadata.get('source', "ReduxLib"),
+                    "source": f"ReduxLib/{doc.metadata['source']}",
                     "file_path": {doc.metadata['source']},
                     "chunk_index": idx,
                 })
