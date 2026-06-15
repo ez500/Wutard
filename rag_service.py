@@ -108,9 +108,9 @@ class AgenticRAGService:
                 }
             ]
         else:
-            print("Loading Deepseek Client")
-            self.deepseek_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openai_api_key)
-            self.deepseek_tool_schema: list[ChatCompletionToolParam] = [
+            print("Loading OpenRouter Client")
+            self.openrouter_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openai_api_key)
+            self.openrouter_tool_schema: list[ChatCompletionToolParam] = [
                 {"type": "function", "function": {
                     "name": "search_rowdy25",
                     "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
@@ -402,7 +402,7 @@ class AgenticRAGService:
     # Agentic adapter
 
     @staticmethod
-    def _parse_deepseek_response(message):
+    def _parse_openrouter_response(message):
         thinking_text = None
         final_answer = message.content or ""
 
@@ -417,6 +417,7 @@ class AgenticRAGService:
 
     async def _get_response(self, system_prompt, message_history):
         if self.premium_agent:
+            print("Sending prompt to Agent (Claude)...\n")
             response = await self.claude_client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=2048,
@@ -426,13 +427,14 @@ class AgenticRAGService:
             text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
             return text_block.text if text_block else None
         else:
+            print("Sending prompt to Agent (OpenRouter)...\n")
             prompt = [{"role": "system", "content": system_prompt}] + message_history
-            response = await self.deepseek_client.chat.completions.create(
+            response = await self.openrouter_client.chat.completions.create(
                 model="nex-agi/nex-n2-pro:free",
                 max_tokens=2048,
                 messages=prompt
             )
-            _, final_response = self._parse_deepseek_response(response.choices[0].message)
+            _, final_response = self._parse_openrouter_response(response.choices[0].message)
             return final_response
 
     async def _get_response_with_tools(self, system_prompt, message_history):
@@ -524,11 +526,11 @@ class AgenticRAGService:
                 response_dict["tool_results"] = tool_results
         else:
             prompt = [{"role": "system", "content": system_prompt}] + message_history
-            print("Sending prompt to Agent (Claude)...\n")
-            response = await self.deepseek_client.chat.completions.create(
+            print("Sending prompt to Agent (OpenRouter)...\n")
+            response = await self.openrouter_client.chat.completions.create(
                 model="nex-agi/nex-n2-pro:free",
                 max_tokens=2048,
-                tools=self.deepseek_tool_schema,
+                tools=self.openrouter_tool_schema,
                 messages=prompt
             )
 
@@ -536,9 +538,9 @@ class AgenticRAGService:
             if response_dict["stop_reason"] == "stop":
                 response_dict["stop_reason"] = "end_turn"
                 message = response.choices[0].message
-                thinking, final = self._parse_deepseek_response(message)
+                thinking, final = self._parse_openrouter_response(message)
                 if thinking:
-                    print(f"Deepseek responded with extended thinking:\n")
+                    print(f"OpenRouter responded with extended thinking:\n")
                     print(f"{thinking}\n")
                 else:
                     print("No extended thinking blocks in this turn.\n")
@@ -677,7 +679,7 @@ CRITICAL: DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR OUTPU
             elif 'TOO_SPECIFIC' in output_code:
                 return None, output_code, "Sorry, I can't help you cheat. Not super! That's life. Maybe ask Geeson."
             else:
-                return output_code, 'GOOD', await self.run_agentic_query(message_history)
+                return output_code, 'GOOD', message_history
         else:
             return None, "Query error. Please try again later."
 

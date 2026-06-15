@@ -1,5 +1,3 @@
-from typing import Optional
-
 import discord
 from discord.ext import commands
 
@@ -33,45 +31,46 @@ class Programming(commands.Cog):
         if not any(word in message.content.lower() for word in filter_words):
             return
 
+        print(f"User {message.author} registered query: {message.content}\n")
         if is_target_thread:
-            async with (message.channel.typing()):
-                conversation_history = []
-                async for past_msg in message.channel.history(limit=20, oldest_first=True):
-                    if past_msg.is_system():
-                        continue
+            conversation_history = []
+            async for past_msg in message.channel.history(limit=20, oldest_first=True):
+                if past_msg.is_system():
+                    continue
 
-                    role = "assistant" if past_msg.author == self.client.user else "user"
-                    conversation_history.append({"role": role, "content": past_msg.clean_content})
+                role = "assistant" if past_msg.author == self.client.user else "user"
+                conversation_history.append({"role": role, "content": past_msg.clean_content})
 
-                _, output_code, response = (
-                    await self.rag_service.run_agentic_query_with_system_guardrail(conversation_history)
-                )
-                print(f"User {message.author} registered query: {message.content}\n")
-                print(f"Evaluated as: {output_code}")
-                if response:
-                    print(response + "\n")
-                    await message.channel.send(response)
+            _, output_code, response = (
+                await self.rag_service.run_agentic_query_with_system_guardrail(conversation_history)
+            )
+            print(f"Evaluated as: {output_code}")
+            if "GOOD" in output_code:
+                async with (message.channel.typing()):
+                    approved_query_response = await self.rag_service.run_agentic_query(response)
+                    print(approved_query_response + "\n")
+                    await message.channel.send(approved_query_response)
+            elif response:
+                print(response + "\n")
+                await message.channel.send(response)
         else:
-            async with ((message.channel.typing())):
-                new_thread: Optional[discord.Thread] = None
-
-                title, output_code, response = await self.rag_service.register_agentic_query_with_system_guardrail(
-                    message.content
-                )
-                print(f"User {message.author} registered query: {message.content}\n")
-                print(f"Evaluated as: {output_code}")
-                if title:
-                    try:
-                        new_thread = await message.create_thread(name=title, auto_archive_duration=60)
-                    except discord.HTTPException as e:
-                        print(f"Failed to create thread: {e}\n")
-                        await message.channel.send("I am not able to create threads. I guess I can't help. Not super!")
-                if response:
-                    print(response + "\n")
-                    if new_thread:
-                        await new_thread.send(response)
-                    else:
-                        await message.channel.send(response)
+            title, output_code, response = await self.rag_service.register_agentic_query_with_system_guardrail(
+                message.content
+            )
+            print(f"Evaluated as: {output_code}")
+            if title:
+                try:
+                    new_thread = await message.create_thread(name=title, auto_archive_duration=60)
+                    async with ((message.channel.typing())):
+                        approved_query_response = await self.rag_service.run_agentic_query(response)
+                        print(approved_query_response + "\n")
+                        await new_thread.send(approved_query_response)
+                except discord.HTTPException as e:
+                    print(f"Failed to create thread: {e}\n")
+                    await message.channel.send("I am not able to create threads. I guess I can't help. Not super!")
+            elif response:
+                print(response + "\n")
+                await message.channel.send(response)
 
 
 async def setup(client):
