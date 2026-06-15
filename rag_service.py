@@ -6,23 +6,188 @@ from typing import Any
 import anthropic
 import chromadb
 import numpy as np
+import openai
 from anthropic.types import ToolParam, MessageParam, ThinkingBlock, TextBlock, ToolUseBlock
 from chromadb.errors import InternalError
+from openai.types.chat import ChatCompletionToolParam, ChatCompletionMessageFunctionToolCall
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 with open('claude_key', 'r') as f:
-    api_key = f.readline().strip()
+    claude_api_key = f.readline().strip()
+with open('openai_key', 'r') as f:
+    openai_api_key = f.readline().strip()
 
 STOP_WORDS = {"the", "a", "an", "and", "or", "but", "is", "in", "to", "of", "it", "for"}
 
 
 class AgenticRAGService:
-    def __init__(self):
+    def __init__(self, is_claude=True):
         print("Starting asynchronous Agentic RAG setup")
 
-        print("Loading Claude Client")
-        self.claude_client = anthropic.AsyncAnthropic(api_key=api_key)
+        self.premium_agent = is_claude
+        if self.premium_agent:
+            print("Loading Claude Client")
+            self.claude_client = anthropic.AsyncAnthropic(api_key=claude_api_key)
+            self.claude_tool_schema: list[ToolParam] = [
+                {
+                    "name": "search_rowdy25",
+                    "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
+                                   "certain implementation details, such as how a certain feature of the robot works, "
+                                   "or how a specific command is built.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The string query argument that is in the form '[query1, query2, "
+                                               "query3]', with each query limited to less than 6 words per query. "
+                                               "Here is the list of classes that might be useful to include in the "
+                                               "queries: "
+                                               "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                                               "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
+                                               "WristCommand, PivotCommand, SearchForObjectCommand, "
+                                               "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
+                                               "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
+                                               "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
+                                               "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
+                                               "Constants, CompConstants, TestConstants, DefaultConstants, "
+                                               "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
+                                               "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
+                                               "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
+                                               "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                                               "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
+                                               "Robot. "
+                                               "Use prefix 'class' for a query if a particular Java "
+                                               "class is mentioned or is very obviously what the user is asking about."
+                            },
+                            "top_k": {
+                                "type": "integer",
+                                "description": "The number of document chunks (results) to return, depending on how "
+                                               "large or broad in scope the query is. Use 1 for specific API checks, "
+                                               "2 for standard queries, and 3 for broad conceptual questions.",
+                                "minimum": 1,
+                                "maximum": 3
+                            },
+                        },
+                        "required": ["query"]
+                    },
+                },
+                {
+                    "name": "search_external_docs",
+                    "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
+                                   "specific API details, hardware characteristics, framework constraints, etc.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
+                            },
+                            "top_k": {
+                                "type": "integer",
+                                "description": "The number of document chunks (results) to return, depending on how "
+                                               "large or broad in scope the query is. Use 1 for specific API checks, "
+                                               "2 for standard queries, and 3 for broad conceptual questions.",
+                                "minimum": 1,
+                                "maximum": 3
+                            },
+                            "vendor_filter": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
+                                             "revlib", "reduxlib"]
+                                },
+                                "description": "Optional list of vendors to search by. Leave empty to search all "
+                                               "vendors."
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            ]
+        else:
+            print("Loading Deepseek Client")
+            self.deepseek_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openai_api_key)
+            self.deepseek_tool_schema: list[ChatCompletionToolParam] = [
+                {"type": "function", "function": {
+                    "name": "search_rowdy25",
+                    "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
+                                   "certain implementation details, such as how a certain feature of the robot works, "
+                                   "or how a specific command is built.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The string query argument that is in the form '[query1, query2, "
+                                               "query3]', with each query limited to less than 6 words per query. "
+                                               "Here is the list of classes that might be useful to include in the "
+                                               "queries: "
+                                               "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                                               "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
+                                               "WristCommand, PivotCommand, SearchForObjectCommand, "
+                                               "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
+                                               "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
+                                               "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
+                                               "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
+                                               "Constants, CompConstants, TestConstants, DefaultConstants, "
+                                               "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
+                                               "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
+                                               "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
+                                               "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                                               "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
+                                               "Robot. "
+                                               "Use prefix 'class' for a query if a particular Java "
+                                               "class is mentioned or is very obviously what the user is asking about."
+                            },
+                            "top_k": {
+                                "type": "integer",
+                                "description": "The number of document chunks (results) to return, depending on how "
+                                               "large or broad in scope the query is. Use 1 for specific API checks, "
+                                               "2 for standard queries, and 3 for broad conceptual questions.",
+                                "minimum": 1,
+                                "maximum": 3
+                            },
+                        },
+                        "required": ["query"]
+                    },
+                }},
+                {"type": "function", "function": {
+                    "name": "search_external_docs",
+                    "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
+                                   "specific API details, hardware characteristics, framework constraints, etc.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
+                            },
+                            "top_k": {
+                                "type": "integer",
+                                "description": "The number of document chunks (results) to return, depending on how "
+                                               "large or broad in scope the query is. Use 1 for specific API checks, "
+                                               "2 for standard queries, and 3 for broad conceptual questions.",
+                                "minimum": 1,
+                                "maximum": 3
+                            },
+                            "vendor_filter": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
+                                             "revlib", "reduxlib"]
+                                },
+                                "description": "Optional list of vendors to search by. Leave empty to search all "
+                                               "vendors."
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }}
+            ]
 
         print("Loading JINAAI embedding model")
         self.embedding_model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
@@ -234,10 +399,233 @@ class AgenticRAGService:
                                                         query, top_k, vendor_filter)
         return self._strict_semantic_search(self.external_docs_collection, query, top_k, vendor_filter)
 
-    # Claude wrapper
+    # Agentic adapter
 
-    async def continue_convo_with_system_guardrail(self, message_history):
-        system_prompt = ("You are an FRC WPILib assistant. Evaluate the following user query. If it is not explicitly "
+    @staticmethod
+    def _parse_deepseek_response(message):
+        thinking_text = None
+        final_answer = message.content or ""
+
+        if hasattr(message, "model_extra") and message.model_extra is not None:
+            thinking_text = message.model_extra.get("reasoning_content")
+        if not thinking_text and final_answer:
+            thinking_match = re.search(r'<think>(.*?)</think>', final_answer, re.DOTALL)
+            if thinking_match:
+                thinking_text = thinking_match.group(1).strip()
+                final_answer = re.sub(r'<think>.*?</think>', '', final_answer, flags=re.DOTALL).strip()
+        return thinking_text, final_answer
+
+    async def _get_response(self, system_prompt, message_history):
+        if self.premium_agent:
+            response = await self.claude_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=2048,
+                system=system_prompt,
+                messages=message_history
+            )
+            text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
+            return text_block.text if text_block else None
+        else:
+            prompt = [{"role": "system", "content": system_prompt}] + message_history
+            response = await self.deepseek_client.chat.completions.create(
+                model="nex-agi/nex-n2-pro:free",
+                max_tokens=2048,
+                messages=prompt
+            )
+            _, final_response = self._parse_deepseek_response(response.choices[0].message)
+            return final_response
+
+    async def _get_response_with_tools(self, system_prompt, message_history):
+        response_dict = dict()
+
+        if self.premium_agent:
+            print("Sending prompt to Agent (Claude)...\n")
+            response = await self.claude_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=2048,
+                tools=self.claude_tool_schema,
+                system=system_prompt,
+                messages=message_history
+            )
+
+            response_dict["stop_reason"] = response.stop_reason
+            if response_dict["stop_reason"] == "end_turn":
+                thinking_blocks = [block for block in response.content if isinstance(block, ThinkingBlock)]
+                if thinking_blocks:
+                    print(f"Claude responded with {len(thinking_blocks)} extended thinking blocks:\n")
+                    for i, block in enumerate(thinking_blocks):
+                        print(f"Block {i + 1}:\n{block.thinking}\n")
+                else:
+                    print("No extended thinking blocks in this turn.\n")
+
+                text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
+                if text_block:
+                    response_dict["content"] = text_block.text
+                else:
+                    response_dict["content"] = "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+
+            elif response_dict["stop_reason"] == "tool_use":
+                print(f"External documentation required, deploying retrieval\n")
+                message_history.append({"role": "assistant", "content": response.content})
+
+                tool_blocks = [block for block in response.content if isinstance(block, ToolUseBlock)]
+                tool_results = []
+                for tool_call in tool_blocks:
+                    if tool_call and tool_call.name == "search_rowdy25":
+                        query = tool_call.input.get("query")
+                        top_k = tool_call.input.get("top_k", 3)
+
+                        if not isinstance(query, str):
+                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                            print("Failed searching for Rowdy25 docs, invalid inputs.")
+                        else:
+                            if not isinstance(top_k, int):
+                                top_k = 3
+                            tool_result = self.search_rowdy25(query, top_k)
+                            print(f"\nSearching for Rowdy25 docs!\n"
+                                  f"Query: {query}\n"
+                                  f"Top K results (order of context): {top_k}\n"
+                                  f"Extracted Rowdy25 material:\n"
+                                  f"{tool_result}\n\n")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_call.id,
+                            "content": tool_result
+                        })
+
+                    if tool_call and tool_call.name == "search_external_docs":
+                        query = tool_call.input.get("query")
+                        top_k = tool_call.input.get("top_k", 3)
+                        vendor_filter = tool_call.input.get("vendor_filter")
+
+                        if not isinstance(query, str):
+                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                            print("Failed searching for Rowdy25 docs, invalid inputs.")
+                        else:
+                            if not isinstance(top_k, int):
+                                top_k = 3
+
+                            if not isinstance(vendor_filter, list):
+                                vendor_filter = None
+                            else:
+                                vendor_filter = [vendor for vendor in vendor_filter if isinstance(vendor, str)]
+                            tool_result = self.search_external_docs(query, top_k, vendor_filter)
+                            print(f"\nSearching for external docs!\n"
+                                  f"Query: {query}\n"
+                                  f"Top K results (order of context): {top_k}\n"
+                                  f"Vendor filter: {vendor_filter if vendor_filter else "All"}\n"
+                                  f"Extracted external docs material:\n"
+                                  f"{tool_result}\n\n")
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_call.id,
+                            "content": tool_result
+                        })
+                response_dict["tool_results"] = tool_results
+        else:
+            prompt = [{"role": "system", "content": system_prompt}] + message_history
+            print("Sending prompt to Agent (Claude)...\n")
+            response = await self.deepseek_client.chat.completions.create(
+                model="nex-agi/nex-n2-pro:free",
+                max_tokens=2048,
+                tools=self.deepseek_tool_schema,
+                messages=prompt
+            )
+
+            response_dict["stop_reason"] = response.choices[0].finish_reason
+            if response_dict["stop_reason"] == "stop":
+                response_dict["stop_reason"] = "end_turn"
+                message = response.choices[0].message
+                thinking, final = self._parse_deepseek_response(message)
+                if thinking:
+                    print(f"Deepseek responded with extended thinking:\n")
+                    print(f"{thinking}\n")
+                else:
+                    print("No extended thinking blocks in this turn.\n")
+
+                if final:
+                    response_dict["content"] = final
+                else:
+                    response_dict["content"] = "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+
+            elif response_dict["stop_reason"] == "tool_calls":
+                response_dict["stop_reason"] = "tool_use"
+                print(f"External documentation required, deploying retrieval\n")
+                message = response.choices[0].message
+                message_history.append(message)
+
+                tool_results = []
+                if message.tool_calls:
+                    for tool_call in message.tool_calls:
+                        if (tool_call and isinstance(tool_call, ChatCompletionMessageFunctionToolCall)
+                                and tool_call.function.name == "search_rowdy25"):
+                            query = tool_call.function.arguments.get("query")
+                            top_k = tool_call.function.arguments.get("top_k", 3)
+
+                            if not isinstance(query, str):
+                                tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                                print("Failed searching for Rowdy25 docs, invalid inputs.")
+                            else:
+                                if not isinstance(top_k, int):
+                                    top_k = 3
+                                tool_result = self.search_rowdy25(query, top_k)
+                                print(f"\nSearching for Rowdy25 docs!\n"
+                                      f"Query: {query}\n"
+                                      f"Top K results (order of context): {top_k}\n"
+                                      f"Extracted Rowdy25 material:\n"
+                                      f"{tool_result}\n\n")
+                            tool_results.append({
+                                "role": "tool",
+                                "tool_use_id": tool_call.id,
+                                "content": tool_result
+                            })
+
+                        if (tool_call and isinstance(tool_call, ChatCompletionMessageFunctionToolCall)
+                                and tool_call.function.name == "search_external_docs"):
+                            query = tool_call.function.arguments.get("query")
+                            top_k = tool_call.function.arguments.get("top_k", 3)
+                            vendor_filter = tool_call.function.arguments.get("vendor_filter")
+
+                            if not isinstance(query, str):
+                                tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                                print("Failed searching for Rowdy25 docs, invalid inputs.")
+                            else:
+                                if not isinstance(top_k, int):
+                                    top_k = 3
+
+                                if not isinstance(vendor_filter, list):
+                                    vendor_filter = None
+                                else:
+                                    vendor_filter = [vendor for vendor in vendor_filter if isinstance(vendor, str)]
+                                tool_result = self.search_external_docs(query, top_k, vendor_filter)
+                                print(f"\nSearching for external docs!\n"
+                                      f"Query: {query}\n"
+                                      f"Top K results (order of context): {top_k}\n"
+                                      f"Vendor filter: {vendor_filter if vendor_filter else "All"}\n"
+                                      f"Extracted external docs material:\n"
+                                      f"{tool_result}\n\n")
+                            tool_results.append({
+                                "role": "tool",
+                                "tool_use_id": tool_call.id,
+                                "content": tool_result
+                            })
+                    response_dict["tool_results"] = tool_results
+        return response_dict
+
+    async def _update_with_tool_results(self, message_history, tool_results):
+        if self.premium_agent and tool_results:
+            message_history.append({"role": "user", "content": tool_results})
+        elif tool_results:
+            message_history.append(tool_results)
+        return message_history
+
+    # Agentic wrapper
+
+    async def register_agentic_query_with_system_guardrail(self, user_query):
+        return await self.run_agentic_query_with_system_guardrail([{"role": "user", "content": user_query}])
+
+    async def run_agentic_query_with_system_guardrail(self, message_history):
+        system_prompt = ("You are an expert FRC programmer. Evaluate the following user query. If it is not explicitly "
                          "related to WPILib, FRC, and robotics programming, output exactly 'OUT_OF_SCOPE' and nothing "
                          "else. If it is more than one question, output exactly 'TOO_MANY_QUESTIONS' and nothing else. "
                          "If the conversation is going in a direction where you have to start implementing entire "
@@ -247,16 +635,8 @@ class AgenticRAGService:
                          "If it is a trivial question, output exactly 'TRIVIAL' and nothing else. Otherwise, output "
                          "a short phrase that describes the user's intent (like a title of a chat).")
 
-        response = await self.claude_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
-            system=system_prompt,
-            messages=message_history
-        )
-
-        text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
-        if text_block:
-            output_code = text_block.text
+        output_code = await self._get_response(system_prompt, message_history)
+        if output_code:
             print(output_code + "\n")
             if output_code == 'OUT_OF_SCOPE' or output_code == 'TRIVIAL':
                 return None, "I'm sorry, you're going to have to ask Geeson over there. That's life!"
@@ -269,8 +649,38 @@ class AgenticRAGService:
         else:
             return None, "Query error. Please try again later."
 
-    async def register_query_with_system_guardrail(self, user_query):
-        return await self.continue_convo_with_system_guardrail([{"role": "user", "content": user_query}])
+    async def run_agentic_query(self, message_history):
+        system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely (50 words). "
+                         "The broader the question, the less specific you can be in your answer. "
+                         "Only use each tool once. Do not strive for perfection. "
+                         "Use the available tools to answer questions about the codebase, "
+                         "hardware, and API details. "
+                         "For searching Rowdy25 code, you must generate up to 3 precise technical search queries "
+                         "for the string query argument that is in the form '[query1, query2, query3]', with each "
+                         "query limited to less than 6 words per query. Be clever with your queries. "
+                         "Here is the list of classes that might be useful to include in your queries: "
+                         "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                         "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, WristCommand, "
+                         "PivotCommand, SearchForObjectCommand, FollowPathRequiringAlgaeCommand, Lights, Localizer, "
+                         "LocalizerSim, LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
+                         "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, SwerveTelemetry, "
+                         "RobotIdentity, RobotPoses, Constants, CompConstants, TestConstants, DefaultConstants, "
+                         "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
+                         "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, GravityGainsCalculator, "
+                         "MacAddress, RotationUtil, MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                         "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, Robot. "
+                         "Use prefix 'class' for your query if a particular Java "
+                         "class is mentioned or is very obviously what the user is asking about.")
+
+        while True:
+            response = await self._get_response_with_tools(system_prompt, message_history)
+            if response.get("stop_reason") and response["stop_reason"] == "end_turn":
+                return response["content"]
+            elif response.get("stop_reason") and response["stop_reason"] == "tool_use":
+                message_history = await self._update_with_tool_results(message_history, response["tool_results"])
+            else:
+                print(f"Error: Unexpected response format, with stop reason {response.get("stop_reason")}.\n")
+                return "Something went wrong. Please try again later."
 
     async def _retrieve_robot_code_context(self, user_query):
         system_prompt = (f"You are a research assistant. Analyze the user query and generate a list of 3 precise "
@@ -304,188 +714,6 @@ class AgenticRAGService:
             return self.search_rowdy25(text_block.text)
         else:
             return "No relevant results found"
-
-    async def run_agentic_query(self, message_history):
-        system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely (50 words). "
-                         "The broader the question, the less specific you can be in your answer. "
-                         "Only use each tool once. Do not strive for perfection. "
-                         "Use the available tools to answer questions about the codebase, "
-                         "hardware, and API details. "
-                         "For searching Rowdy25 code, you must generate up to 3 precise technical search queries "
-                         "for the string query argument that is in the form '[query1, query2, query3]', with each "
-                         "query limited to less than 6 words per query. Be clever with your queries. "
-                         "Here is the list of classes that might be useful to include in your queries: "
-                         "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                         "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, WristCommand, "
-                         "PivotCommand, SearchForObjectCommand, FollowPathRequiringAlgaeCommand, Lights, Localizer, "
-                         "LocalizerSim, LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
-                         "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, SwerveTelemetry, "
-                         "RobotIdentity, RobotPoses, Constants, CompConstants, TestConstants, DefaultConstants, "
-                         "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
-                         "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, GravityGainsCalculator, "
-                         "MacAddress, RotationUtil, MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
-                         "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, Robot. "
-                         "Use prefix 'class' for your query if a particular Java "
-                         "class is mentioned or is very obviously what the user is asking about.")
-
-        tool_schema: list[ToolParam] = [
-            {
-                "name": "search_rowdy25",
-                "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
-                               "certain implementation details, such as how a certain feature of the robot works, "
-                               "or how a specific command is built.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The string query argument that is in the form '[query1, query2, query3]', "
-                                           "with each query limited to less than 6 words per query. Here is the list "
-                                           "of classes that might be useful to include in the queries: "
-                                           "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                                           "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
-                                           "WristCommand, PivotCommand, SearchForObjectCommand, "
-                                           "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
-                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
-                                           "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, "
-                                           "SwerveTelemetry, RobotIdentity, RobotPoses, Constants, CompConstants, "
-                                           "TestConstants, DefaultConstants, SimConstants, "
-                                           "PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
-                                           "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, "
-                                           "GravityGainsCalculator, MacAddress, RotationUtil, MultipleChooser, "
-                                           "ProfiledExpEndController, FieldUtil, SysID, AutoTrigger, AutoEventLooper, "
-                                           "AutoManager, Pathfinder, RobotStates, Robot. "
-                                           "Use prefix 'class' for a query if a particular Java "
-                                           "class is mentioned or is very obviously what the user is asking about."
-                        },
-                        "top_k": {
-                            "type": "integer",
-                            "description": "The number of document chunks (results) to return, depending on how large "
-                                           "or broad in scope the query is. Use 1 for specific API checks, 2 for "
-                                           "standard queries, and 3 for broad conceptual questions.",
-                            "minimum": 1,
-                            "maximum": 3
-                        },
-                    },
-                    "required": ["query"]
-                },
-            },
-            {
-                "name": "search_external_docs",
-                "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
-                               "specific API details, hardware characteristics, framework constraints, etc.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
-                        },
-                        "top_k": {
-                            "type": "integer",
-                            "description": "The number of document chunks (results) to return, depending on how large "
-                                           "or broad in scope the query is. Use 1 for specific API checks, 2 for "
-                                           "standard queries, and 3 for broad conceptual questions.",
-                            "minimum": 1,
-                            "maximum": 3
-                        },
-                        "vendor_filter": {
-                            "type": "array",
-                            "items": {
-                                "type": "string",
-                                "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
-                                         "revlib", "reduxlib"]
-                            },
-                            "description": "Optional list of vendors to search by. Leave empty to search all vendors."}
-                    },
-                    "required": ["query"]
-                }
-            }
-        ]
-
-        while True:
-            print("Sending prompt to Claude...\n")
-            response = await self.claude_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=2048,
-                tools=tool_schema,
-                system=system_prompt,
-                messages=message_history
-            )
-
-            if response.stop_reason == "end_turn":
-                thinking_blocks = [block for block in response.content if isinstance(block, ThinkingBlock)]
-                if thinking_blocks:
-                    print(f"\nRetrieved {len(thinking_blocks)} thinking blocks:\n")
-                    for i, block in enumerate(thinking_blocks):
-                        print(f"Block {i + 1}:\n{block.thinking}\n\n")
-                else:
-                    print("\nNo extended thinking blocks in this turn.\n")
-
-                text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
-                if text_block:
-                    return text_block.text
-                else:
-                    return "I'm sorry, you're going to have to ask Geeson over there. That's life!"
-
-            if response.stop_reason == "tool_use":
-                print(f"External documentation required, deploying retrieval\n")
-                message_history.append({"role": "assistant", "content": response.content})
-
-                tool_blocks = [block for block in response.content if isinstance(block, ToolUseBlock)]
-                tool_results = []
-                for tool_block in tool_blocks:
-                    if tool_block and tool_block.name == "search_rowdy25":
-                        query = tool_block.input.get("query")
-                        top_k = tool_block.input.get("top_k", 3)
-
-                        if not isinstance(query, str):
-                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
-                            print("Failed searching for Rowdy25 docs, invalid inputs.")
-                        else:
-                            if not isinstance(top_k, int):
-                                top_k = 3
-                            tool_result = self.search_rowdy25(query, top_k)
-                            print(f"\nSearching for Rowdy25 docs!\n"
-                                  f"Query: {query}\n"
-                                  f"Top K results (order of context): {top_k}\n"
-                                  f"Extracted Rowdy25 material:\n"
-                                  f"{tool_result}\n\n")
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_block.id,
-                            "content": tool_result
-                        })
-
-                    if tool_block and tool_block.name == "search_external_docs":
-                        query = tool_block.input.get("query")
-                        top_k = tool_block.input.get("top_k", 3)
-                        vendor_filter = tool_block.input.get("vendor_filter")
-
-                        if not isinstance(query, str):
-                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
-                            print("Failed searching for Rowdy25 docs, invalid inputs.")
-                        else:
-                            if not isinstance(top_k, int):
-                                top_k = 3
-
-                            if not isinstance(vendor_filter, list):
-                                vendor_filter = None
-                            else:
-                                vendor_filter = [vendor for vendor in vendor_filter if isinstance(vendor, str)]
-                            tool_result = self.search_external_docs(query, top_k, vendor_filter)
-                            print(f"\nSearching for external docs!\n"
-                                  f"Query: {query}\n"
-                                  f"Top K results (order of context): {top_k}\n"
-                                  f"Vendor filter: {vendor_filter if vendor_filter else "All"}\n"
-                                  f"Extracted external docs material:\n"
-                                  f"{tool_result}\n\n")
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_block.id,
-                            "content": tool_result
-                        })
-                message_history.append({"role": "user", "content": tool_results})
 
 
 if __name__ == "__main__":

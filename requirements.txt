@@ -8,3 +8,4 @@ sentence-transformers~=5.5.1
 anthropic~=0.109.1
 rank-bm25
 numpy
+openai
