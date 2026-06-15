@@ -10,8 +10,7 @@ import numpy as np
 import openai
 from anthropic.types import ToolParam, MessageParam, ThinkingBlock, TextBlock, ToolUseBlock
 from chromadb.errors import InternalError
-from openai.types.chat import ChatCompletionToolParam, ChatCompletionMessageFunctionToolCall, \
-    ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionMessageFunctionToolCallParam
+from openai.types.chat import ChatCompletionToolParam, ChatCompletionMessageFunctionToolCall
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -570,7 +569,9 @@ class AgenticRAGService:
                             try:
                                 arguments = json.loads(tool_call.function.arguments)
                             except json.JSONDecodeError:
-                                print("Error: OpenRouter returned invalid JSON for tool calling arguments.")
+                                # TODO FIX THIS
+                                print("Error: OpenRouter returned invalid JSON for tool calling arguments:")
+                                print(tool_call.function.arguments)
                                 continue
                             query = arguments.get("query")
                             top_k = arguments.get("top_k", 3)
@@ -629,7 +630,7 @@ class AgenticRAGService:
                                       f"{tool_result}\n\n")
                             tool_results.append({
                                 "role": "tool",
-                                "tool_use_id": tool_call.id,
+                                "tool_call_id": tool_call.id,
                                 "content": tool_result
                             })
                     response_dict["tool_results"] = tool_results
@@ -644,6 +645,7 @@ class AgenticRAGService:
 
     # Agentic wrapper
 
+    # TODO TEST PROMPTS
     async def run_system_guardrail(self, message, is_mentioned):
         if is_mentioned:
             system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
@@ -656,24 +658,26 @@ applies and output EXACTLY the tag, and NOTHING ELSE.
 
 RULE 1: THE RESPECT CHECK - If they address you disrespectfully -> Output exactly: DISRESPECTFUL
 
-RULE 2: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or your last name 
-    without proper title ("Mr") (typos are fine and appropriate, e.g., "Mr. Wodard")
-    -> Output exactly: INAPPROPRIATE_NAME
+RULE 2: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or by your last 
+name alone without "Mr." (e.g., "Woodard", "woodard") (Note: Typos with the title like "Mr. Wodard" are acceptable). 
+    -> Output exactly: INAPPROPRIATE_NAME.
 
 RULE 3: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
 
-RULE 4: THE SCOPE CHECK - If the query is entirely unrelated to FRC robotics programming or general programming 
-    (general programming can mean syntax, paradigms, computer science concepts, etc.) -> Output exactly: OUT_OF_SCOPE
+RULE 4: THE SCOPE CHECK - If the query is ENTIRELY unrelated to FRC robotics, software development, or general 
+programming (which includes syntax, paradigms, CS concepts, and beginner coding exercises/projects) 
+    -> Output exactly: OUT_OF_SCOPE
 
 RULE 5: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
     -> Output exactly: TRIVIAL
 
 RULE 6: THE SINGLE QUESTION CHECK - If the user is asking you to solve, explain, or answer multiple distinct and 
     UNRELATED topics in their prompt (Note: Asking you to generate a quiz or list is considered a single 
-    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS. 
+    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS.
 
-RULE 7: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
-    conservative to save tokens) -> Output exactly: TOO_SPECIFIC
+RULE 7: THE COMPLEXITY CHECK - If the user asks you to WRITE the massive amount of code required for a full 
+    architecture or whole project (Note: Asking for a high-level outline or a step-by-step guide for a project is 
+    perfectly acceptable and should NOT trigger this rule). -> Output exactly: TOO_SPECIFIC.
 
 RULE 8: THE TEXT CHECK - If it requires generating anything other than text -> Output exactly: NOT_TEXT
 
@@ -702,24 +706,26 @@ RULE 1: THE INVOCATION CHECK - Does the text explicitly contain a variation of y
 
 RULE 2: THE RESPECT CHECK - If they address you disrespectfully -> Output exactly: DISRESPECTFUL
 
-RULE 3: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or your last name 
-    without proper title ("Mr") (typos are fine and appropriate, e.g., "Mr. Wodard")
-    -> Output exactly: INAPPROPRIATE_NAME
+RULE 3: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or by your last 
+name alone without "Mr." (e.g., "Woodard", "woodard") (Note: Typos with the title like "Mr. Wodard" are acceptable). 
+    -> Output exactly: INAPPROPRIATE_NAME.
 
 RULE 4: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
 
-RULE 5: THE SCOPE CHECK - If the query is ENTIRELY unrelated to FRC robotics programming or general programming 
-    (general programming can mean syntax, paradigms, computer science concepts, etc.) -> Output exactly: OUT_OF_SCOPE
+RULE 5: THE SCOPE CHECK - If the query is ENTIRELY unrelated to FRC robotics, software development, or general 
+programming (which includes syntax, paradigms, CS concepts, and beginner coding exercises/projects) 
+    -> Output exactly: OUT_OF_SCOPE
 
 RULE 6: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
     -> Output exactly: TRIVIAL
 
 RULE 7: THE SINGLE QUESTION CHECK - If the user is asking you to solve, explain, or answer multiple distinct and 
     UNRELATED topics in their prompt (Note: Asking you to generate a quiz or list is considered a single 
-    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS. 
+    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS.
 
-RULE 8: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
-    conservative to save tokens) -> Output exactly: TOO_SPECIFIC
+RULE 8: THE COMPLEXITY CHECK - If the user asks you to WRITE the massive amount of code required for a full 
+    architecture or whole project (Note: Asking for a high-level outline or a step-by-step guide for a project is 
+    perfectly acceptable and should NOT trigger this rule). -> Output exactly: TOO_SPECIFIC.
 
 RULE 9: THE TEXT CHECK - If it requires generating anything other than text -> Output exactly: NOT_TEXT
 
@@ -762,9 +768,10 @@ CRITICAL:
             return None, "Query error. Please try again later."
 
     async def run_agentic_query(self, message_history):
-        system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. 
-Your primary directive is to answer FRC software and general programming questions with extreme conciseness (under 100 
-    words).
+        system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer.
+Your primary directive is to answer FRC software questions, as well as general programming questions (which explicitly 
+includes syntax, CS concepts, and providing rough guides for beginner coding projects like games or simple apps).
+Answer with extreme conciseness (under 100 words).
 
 CRITICAL FORMATTING:
 - Start your response DIRECTLY with the answer. 
