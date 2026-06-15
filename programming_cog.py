@@ -27,8 +27,8 @@ class Programming(commands.Cog):
         if not (is_target_channel or is_target_thread):
             return
 
-        filter_words = ["woodard", "chris", "rowdy", "rowdy25", "bot", "code"]
-        if not any(word in message.content.lower() for word in filter_words):
+        filter_words = ["woodard", "chris", "rowdy", "rowdy25", "bot", "code", "coding", "java"]
+        if not any(word in message.content.lower() for word in filter_words) and client_user not in message.mentions:
             return
 
         print(f"User {message.author} registered query: {message.content}\n")
@@ -60,10 +60,10 @@ class Programming(commands.Cog):
             print(f"Evaluated as: {output_code}")
             if title:
                 try:
-                    new_thread = await message.create_thread(name=title, auto_archive_duration=60)
                     async with ((message.channel.typing())):
                         approved_query_response = await self.rag_service.run_agentic_query(response)
                         print(approved_query_response + "\n")
+                        new_thread = await message.create_thread(name=title, auto_archive_duration=60)
                         await new_thread.send(approved_query_response)
                 except discord.HTTPException as e:
                     print(f"Failed to create thread: {e}\n")

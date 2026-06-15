@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 from typing import Any
@@ -434,8 +435,10 @@ class AgenticRAGService:
                 max_tokens=2048,
                 messages=prompt
             )
-            _, final_response = self._parse_openrouter_response(response.choices[0].message)
-            return final_response
+            if response.choices:
+                _, final_response = self._parse_openrouter_response(response.choices[0].message)
+                return final_response
+            return None
 
     async def _get_response_with_tools(self, system_prompt, message_history):
         response_dict = dict()
@@ -561,8 +564,13 @@ class AgenticRAGService:
                     for tool_call in message.tool_calls:
                         if (tool_call and isinstance(tool_call, ChatCompletionMessageFunctionToolCall)
                                 and tool_call.function.name == "search_rowdy25"):
-                            query = tool_call.function.arguments.get("query")
-                            top_k = tool_call.function.arguments.get("top_k", 3)
+                            try:
+                                arguments = json.loads(tool_call.function.arguments)
+                            except json.JSONDecodeError:
+                                print("Error: OpenRouter returned invalid JSON for tool calling arguments.")
+                                continue
+                            query = arguments.get("query")
+                            top_k = arguments.get("top_k", 3)
 
                             if not isinstance(query, str):
                                 tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
@@ -578,7 +586,7 @@ class AgenticRAGService:
                                       f"{tool_result}\n\n")
                             tool_results.append({
                                 "role": "tool",
-                                "tool_use_id": tool_call.id,
+                                "tool_call_id": tool_call.id,
                                 "content": tool_result
                             })
 
@@ -618,7 +626,7 @@ class AgenticRAGService:
         if self.premium_agent and tool_results:
             message_history.append({"role": "user", "content": tool_results})
         elif tool_results:
-            message_history.append(tool_results)
+            message_history.extend(tool_results)
         return message_history
 
     # Agentic wrapper
@@ -631,32 +639,43 @@ class AgenticRAGService:
         strict routing guardrail for a user query.
 
 You MUST evaluate the user's query against the following cascade of rules. You must stop at the VERY FIRST rule that 
-applies and output EXACTLY the capitalized tag, and NOTHING ELSE.
+applies and output EXACTLY the tag, and NOTHING ELSE.
 
 --- EVALUATION CASCADE ---
 
-RULE 1: THE INVOCATION CHECK Does the text explicitly contain a variation of your name to get your attention (e.g., 
+RULE 1: THE INVOCATION CHECK - Does the text explicitly contain a variation of your name to get your attention (e.g., 
 "Mr. Woodard", "Woodard", "Chris", "Christopher")? - If NO -> Output exactly: NOT_FOR_ME
 
-RULE 2: THE RESPECT CHECK
-- If they call you by your first name ("Chris" or "Christopher") -> Output exactly: FIRST_NAME
-- If they address you disrespectfully -> Output exactly: DISRESPECTFUL
+RULE 2: THE RESPECT CHECK - If they address you disrespectfully -> Output exactly: DISRESPECTFUL
 
-RULE 3: THE BATHROOM CHECK
-- If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
+RULE 3: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or your last name 
+    without proper title ("Mr") (typos are fine and appropriate, e.g., "Mr. Wodard")
+    -> Output exactly: INAPPROPRIATE_NAME
 
-RULE 4: THE SCOPE CHECK
-- If the query is entirely unrelated to FRC, WPILib, robotics, or programming -> Output exactly: OUT_OF_SCOPE
+RULE 4: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
 
-RULE 5: THE COMPLEXITY CHECK - If it is a basic, silly, or trivial question -> Output exactly: TRIVIAL - If it 
-contains multiple distinct questions -> Output exactly: TOO_MANY_QUESTIONS - If it requires writing a massive amount 
-of code, architecture, or a whole project (be conservative to save tokens) -> Output exactly: TOO_SPECIFIC
+RULE 5: THE SCOPE CHECK - If the query is entirely unrelated to FRC, WPILib, robotics, or programming
+    -> Output exactly: OUT_OF_SCOPE
 
-RULE 6: SUCCESS If the query passes all the rules above, output a short 3-to-5 word phrase that describes the user's 
-intent to be used as a chat title.
+RULE 6: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
+    -> Output exactly: TRIVIAL
+
+RULE 7: THE SINGLE QUESTION CHECK - If it contains multiple distinct and unrelated questions (a follow-up question 
+    counts as part of the original question) -> Output exactly: TOO_MANY_QUESTIONS
+
+RULE 8: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
+    conservative to save tokens) -> Output exactly: TOO_SPECIFIC
+
+RULE 9: SUCCESS
+If the query passes all the rules above, output a short 3-to-5 word title for this chat. 
+FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake Automation Help"), NOT capitalized, 
+and NO underscores.
 
 ---
-CRITICAL: DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR OUTPUT.
+CRITICAL: 
+- For Rules 1-8, you MUST output the exact capitalized tag with underscores.
+- For Rule 9, you MUST output a standard human-readable phrase.
+- DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR ANSWER.
         """)
 
         output_code = await self._get_response(system_prompt, message_history)
@@ -667,8 +686,9 @@ CRITICAL: DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR OUTPU
                 return (None, output_code,
                         "Ah, please go sit down. If you're disrespectful again we're going to have to talk after COB "
                         "and I'm going to have to send you to HR. Not super.")
-            elif 'FIRST_NAME' in output_code:
-                return None, output_code, "Ah, that's actually Mr. Woodard to you. Please ask again in a nicer manner."
+            elif 'INAPPROPRIATE_NAME' in output_code:
+                return (None, "INAPPROPRIATE_NAME",
+                        "Ah, that's actually Mr. Woodard to you. Please ask again in a nicer manner.")
             elif 'BATHROOM' in output_code:
                 return None, output_code, "Of course. Ah, send me an email. Super!"
             elif 'OUT_OF_SCOPE' in output_code or 'TRIVIAL' in output_code:

@@ -1,11 +1,20 @@
+# Standard Libraries (Pinned for stability)
 discord.py~=2.7.1
 pillow~=12.2.0
-chromadb~=1.5.9
 beautifulsoup4~=4.15.0
-langchain-community~=0.4.2
-langchain-text-splitters~=1.1.2
-sentence-transformers~=5.5.1
-anthropic~=0.109.1
+
+# Database & Vectors
+chromadb~=1.5.9
+
+# AI & LLM Libraries (Unpinned to prevent dependency conflicts)
+anthropic
+openai
+langchain-community
+langchain-text-splitters
+transformers<5.0.0
+sentence-transformers==5.5.1
+huggingface-hub
+
+# Math & Search
 rank-bm25
 numpy
-openai
