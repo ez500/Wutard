@@ -633,10 +633,7 @@ class AgenticRAGService:
 
     # Agentic wrapper
 
-    async def run_initial_system_guardrail(self, user_query, is_mentioned):
-        return await self.run_system_guardrail([{"role": "user", "content": user_query}], is_mentioned)
-
-    async def run_system_guardrail(self, message_history, is_mentioned):
+    async def run_system_guardrail(self, message, is_mentioned):
         if is_mentioned:
             system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
         strict routing guardrail for a user query.
@@ -666,15 +663,17 @@ RULE 6: THE SINGLE QUESTION CHECK - If it contains multiple distinct and unrelat
 RULE 7: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
     conservative to save tokens) -> Output exactly: TOO_SPECIFIC
 
-RULE 8: SUCCESS
+RULE 8: THE TEXT CHECK - If it requires generating anything other than text -> Output exactly: NOT_TEXT
+
+RULE 9: SUCCESS
 If the query passes all the rules above, output a short 3-to-5 word title for this chat. 
 FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake Automation Help"), NOT capitalized, 
 and NO underscores.
 
 ---
 CRITICAL: 
-- For Rules 1-7, you MUST output the exact capitalized tag with underscores.
-- For Rule 8, you MUST output a standard human-readable phrase.
+- For Rules 1-8, you MUST output the exact capitalized tag with underscores.
+- For Rule 9, you MUST output a standard human-readable phrase.
 - DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR ANSWER.
             """)
         else:
@@ -709,19 +708,22 @@ RULE 7: THE SINGLE QUESTION CHECK - If it contains multiple distinct and unrelat
 RULE 8: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
     conservative to save tokens) -> Output exactly: TOO_SPECIFIC
 
-RULE 9: SUCCESS
+RULE 9: THE TEXT CHECK - If it requires generating anything other than text -> Output exactly: NOT_TEXT
+
+RULE 10: SUCCESS
 If the query passes all the rules above, output a short 3-to-5 word title for this chat. 
 FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake Automation Help"), NOT capitalized, 
 and NO underscores.
 
 ---
 CRITICAL: 
-- For Rules 1-8, you MUST output the exact capitalized tag with underscores.
-- For Rule 9, you MUST output a standard human-readable phrase.
+- For Rules 1-9, you MUST output the exact capitalized tag with underscores.
+- For Rule 10, you MUST output a standard human-readable phrase.
 - DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR ANSWER.
             """)
 
-        output_code = await self._get_response(system_prompt, message_history)
+        conversation = [{"role": "user", "content": message}]
+        output_code = await self._get_response(system_prompt, conversation)
         if output_code:
             if 'NOT_FOR_ME' in output_code:
                 return None, output_code, None
@@ -734,7 +736,7 @@ CRITICAL:
                         "Ah, that's actually Mr. Woodard to you. Please ask again in a nicer manner.")
             elif 'BATHROOM' in output_code:
                 return None, output_code, "Of course. Ah, send me an email. Super!"
-            elif 'OUT_OF_SCOPE' in output_code or 'TRIVIAL' in output_code:
+            elif 'OUT_OF_SCOPE' in output_code or 'TRIVIAL' in output_code or 'NOT_TEXT' in output_code:
                 return None, output_code, "I'm sorry, you're going to have to ask Geeson over there. That's life!"
             elif 'TOO_MANY_QUESTIONS' in output_code:
                 return (None, output_code,
@@ -742,7 +744,7 @@ CRITICAL:
             elif 'TOO_SPECIFIC' in output_code:
                 return None, output_code, "Sorry, I can't help you cheat. Not super! That's life. Maybe ask Geeson."
             else:
-                return output_code, 'GOOD', message_history
+                return output_code, 'GOOD', conversation
         else:
             return None, "Query error. Please try again later."
 

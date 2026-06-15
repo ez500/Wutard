@@ -15,6 +15,15 @@ class Programming(commands.Cog):
                        "questions feel free to head to <#1292666640256991282> and ask me for help. Make sure to get "
                        "my attention and ask your programming question.")
 
+    @commands.hybrid_command(name='togglellmmodel', description='toggle between the cheap and normal llm models')
+    async def toggle_llm_model(self, ctx):
+        if ctx.author.id == 434430979075997707:
+            self.rag_service.premium_agent = not self.rag_service.premium_agent
+            await ctx.send(f"LLM model toggled to {'premium' if self.rag_service.premium_agent else 'cheap'}.")
+        else:
+            await ctx.send("Ah, super! I'm not gonna let you do that. You're not my boss! Please go sit down. "
+                           "That's life!")
+
     @commands.Cog.listener()
     async def on_message(self, message):
         client_user = self.client.user
@@ -25,12 +34,18 @@ class Programming(commands.Cog):
         if message.author.bot:
             return
 
-        target_channels = [1292666640256991282, 1013977098370699305]
-        is_target_channel = message.channel.id in target_channels
-        is_target_thread = isinstance(message.channel, discord.Thread) and message.channel.parent_id in target_channels
-        is_mentioned = client_user in message.mentions
+        valid_channels = [1292666640256991282, 1013977098370699305]
+        is_valid_channel = message.channel.id in valid_channels
+        is_valid_thread = isinstance(message.channel, discord.Thread) and message.channel.parent_id in valid_channels
+        is_listening_thread = False
+        if is_valid_thread:
+            async for past_msg in message.channel.history(limit=5):
+                if past_msg.author == client_user:
+                    is_listening_thread = True
+                    break
+        is_mentioned = client_user in message.mentions or is_listening_thread
 
-        if not (is_target_channel or is_target_thread):
+        if not (is_valid_channel or is_valid_thread):
             return
 
         filter_words = ["woodard", "chris", "rowdy", "rowdy25", "bot", "code", "coding", "java"]
@@ -38,7 +53,7 @@ class Programming(commands.Cog):
             return
 
         print(f"User {message.author} registered query: {message.content}\n")
-        if is_target_thread:
+        if is_valid_thread:
             conversation_history = []
             async for past_msg in message.channel.history(limit=20, oldest_first=True):
                 if past_msg.is_system():
@@ -48,7 +63,7 @@ class Programming(commands.Cog):
                 conversation_history.append({"role": role, "content": past_msg.clean_content})
 
             _, output_code, response = (
-                await self.rag_service.run_system_guardrail(conversation_history, is_mentioned)
+                await self.rag_service.run_system_guardrail(conversation_history[-1]["content"], is_mentioned)
             )
             print(f"Evaluated as: {output_code}")
             if "GOOD" in output_code:
@@ -60,7 +75,7 @@ class Programming(commands.Cog):
                 print(response + "\n")
                 await message.channel.send(response)
         else:
-            title, output_code, response = await self.rag_service.run_initial_system_guardrail(
+            title, output_code, response = await self.rag_service.run_system_guardrail(
                 message.content, is_mentioned
             )
             print(f"Evaluated as: {output_code}")
