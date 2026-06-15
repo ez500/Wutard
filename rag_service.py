@@ -604,7 +604,8 @@ class AgenticRAGService:
                             try:
                                 arguments = json.loads(tool_call.function.arguments)
                             except json.JSONDecodeError:
-                                print("Error: OpenRouter returned invalid JSON for tool calling arguments.")
+                                print("Error: OpenRouter returned invalid JSON for tool calling arguments:")
+                                print(tool_call.function.arguments)
                                 continue
                             query = arguments.get("query")
                             top_k = arguments.get("top_k", 3)
@@ -646,6 +647,7 @@ class AgenticRAGService:
     # Agentic wrapper
 
     # TODO TEST PROMPTS
+    # TODO INCLUDE CONTEXT FOR BETTER EVALUATION
     async def run_system_guardrail(self, message, is_mentioned):
         if is_mentioned:
             system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 

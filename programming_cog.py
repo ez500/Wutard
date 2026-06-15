@@ -68,7 +68,7 @@ class Programming(commands.Cog):
             print(f"Evaluated as: {output_code}")
             if "GOOD" in output_code:
                 async with (message.channel.typing()):
-                    approved_query_response = await self.rag_service.run_agentic_query(response)
+                    approved_query_response = await self.rag_service.run_agentic_query(conversation_history)
                     print(approved_query_response + "\n")
                     await message.channel.send(approved_query_response)
             elif response:
