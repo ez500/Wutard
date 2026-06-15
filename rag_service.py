@@ -27,168 +27,167 @@ class AgenticRAGService:
         print("Starting asynchronous Agentic RAG setup")
 
         self.premium_agent = is_claude
-        if self.premium_agent:
-            print("Loading Claude Client")
-            self.claude_client = anthropic.AsyncAnthropic(api_key=claude_api_key)
-            self.claude_tool_schema: list[ToolParam] = [
-                {
-                    "name": "search_rowdy25",
-                    "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
-                                   "certain implementation details, such as how a certain feature of the robot works, "
-                                   "or how a specific command is built.",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "The string query argument that is in the form '[query1, query2, "
-                                               "query3]', with each query limited to less than 6 words per query. "
-                                               "Here is the list of classes that might be useful to include in the "
-                                               "queries: "
-                                               "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                                               "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
-                                               "WristCommand, PivotCommand, SearchForObjectCommand, "
-                                               "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
-                                               "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
-                                               "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
-                                               "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
-                                               "Constants, CompConstants, TestConstants, DefaultConstants, "
-                                               "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
-                                               "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
-                                               "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
-                                               "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
-                                               "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
-                                               "Robot. "
-                                               "Use prefix 'class' for a query if a particular Java "
-                                               "class is mentioned or is very obviously what the user is asking about."
-                            },
-                            "top_k": {
-                                "type": "integer",
-                                "description": "The number of document chunks (results) to return, depending on how "
-                                               "large or broad in scope the query is. Use 1 for specific API checks, "
-                                               "2 for standard queries, and 3 for broad conceptual questions.",
-                                "minimum": 1,
-                                "maximum": 3
-                            },
+        print("Loading Claude Client")
+        self.claude_client = anthropic.AsyncAnthropic(api_key=claude_api_key)
+        self.claude_tool_schema: list[ToolParam] = [
+            {
+                "name": "search_rowdy25",
+                "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
+                               "certain implementation details, such as how a certain feature of the robot works, "
+                               "or how a specific command is built.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The string query argument that is in the form '[query1, query2, "
+                                           "query3]', with each query limited to less than 6 words per query. "
+                                           "Here is the list of classes that might be useful to include in the "
+                                           "queries: "
+                                           "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                                           "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
+                                           "WristCommand, PivotCommand, SearchForObjectCommand, "
+                                           "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
+                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
+                                           "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
+                                           "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
+                                           "Constants, CompConstants, TestConstants, DefaultConstants, "
+                                           "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
+                                           "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
+                                           "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
+                                           "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                                           "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
+                                           "Robot. "
+                                           "Use prefix 'class' for a query if a particular Java "
+                                           "class is mentioned or is very obviously what the user is asking about."
                         },
-                        "required": ["query"]
+                        "top_k": {
+                            "type": "integer",
+                            "description": "The number of document chunks (results) to return, depending on how "
+                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                                           "2 for standard queries, and 3 for broad conceptual questions.",
+                            "minimum": 1,
+                            "maximum": 3
+                        },
                     },
+                    "required": ["query"]
                 },
-                {
-                    "name": "search_external_docs",
-                    "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
-                                   "specific API details, hardware characteristics, framework constraints, etc.",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
-                            },
-                            "top_k": {
-                                "type": "integer",
-                                "description": "The number of document chunks (results) to return, depending on how "
-                                               "large or broad in scope the query is. Use 1 for specific API checks, "
-                                               "2 for standard queries, and 3 for broad conceptual questions.",
-                                "minimum": 1,
-                                "maximum": 3
-                            },
-                            "vendor_filter": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
-                                             "revlib", "reduxlib"]
-                                },
-                                "description": "Optional list of vendors to search by. Leave empty to search all "
-                                               "vendors."
-                            }
+            },
+            {
+                "name": "search_external_docs",
+                "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
+                               "specific API details, hardware characteristics, framework constraints, etc.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
                         },
-                        "required": ["query"]
-                    }
-                }
-            ]
-        else:
-            print("Loading OpenRouter Client")
-            self.openrouter_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
-            self.openrouter_tool_schema: list[ChatCompletionToolParam] = [
-                {"type": "function", "function": {
-                    "name": "search_rowdy25",
-                    "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
-                                   "certain implementation details, such as how a certain feature of the robot works, "
-                                   "or how a specific command is built.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "The string query argument that is in the form '[query1, query2, "
-                                               "query3]', with each query limited to less than 6 words per query. "
-                                               "Here is the list of classes that might be useful to include in the "
-                                               "queries: "
-                                               "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                                               "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
-                                               "WristCommand, PivotCommand, SearchForObjectCommand, "
-                                               "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
-                                               "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
-                                               "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
-                                               "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
-                                               "Constants, CompConstants, TestConstants, DefaultConstants, "
-                                               "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
-                                               "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
-                                               "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
-                                               "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
-                                               "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
-                                               "Robot. "
-                                               "Use prefix 'class' for a query if a particular Java "
-                                               "class is mentioned or is very obviously what the user is asking about."
-                            },
-                            "top_k": {
-                                "type": "integer",
-                                "description": "The number of document chunks (results) to return, depending on how "
-                                               "large or broad in scope the query is. Use 1 for specific API checks, "
-                                               "2 for standard queries, and 3 for broad conceptual questions.",
-                                "minimum": 1,
-                                "maximum": 3
-                            },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "The number of document chunks (results) to return, depending on how "
+                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                                           "2 for standard queries, and 3 for broad conceptual questions.",
+                            "minimum": 1,
+                            "maximum": 3
                         },
-                        "required": ["query"]
+                        "vendor_filter": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
+                                         "revlib", "reduxlib"]
+                            },
+                            "description": "Optional list of vendors to search by. Leave empty to search all "
+                                           "vendors."
+                        }
                     },
-                }},
-                {"type": "function", "function": {
-                    "name": "search_external_docs",
-                    "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
-                                   "specific API details, hardware characteristics, framework constraints, etc.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
-                            },
-                            "top_k": {
-                                "type": "integer",
-                                "description": "The number of document chunks (results) to return, depending on how "
-                                               "large or broad in scope the query is. Use 1 for specific API checks, "
-                                               "2 for standard queries, and 3 for broad conceptual questions.",
-                                "minimum": 1,
-                                "maximum": 3
-                            },
-                            "vendor_filter": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
-                                             "revlib", "reduxlib"]
-                                },
-                                "description": "Optional list of vendors to search by. Leave empty to search all "
-                                               "vendors."
-                            }
+                    "required": ["query"]
+                }
+            }
+        ]
+
+        print("Loading OpenRouter Client")
+        self.openrouter_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
+        self.openrouter_tool_schema: list[ChatCompletionToolParam] = [
+            {"type": "function", "function": {
+                "name": "search_rowdy25",
+                "description": "Searches the Rowdy25 codebase. Use this when you need to answer questions about "
+                               "certain implementation details, such as how a certain feature of the robot works, "
+                               "or how a specific command is built.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The string query argument that is in the form '[query1, query2, "
+                                           "query3]', with each query limited to less than 6 words per query. "
+                                           "Here is the list of classes that might be useful to include in the "
+                                           "queries: "
+                                           "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
+                                           "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
+                                           "WristCommand, PivotCommand, SearchForObjectCommand, "
+                                           "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
+                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
+                                           "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
+                                           "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
+                                           "Constants, CompConstants, TestConstants, DefaultConstants, "
+                                           "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
+                                           "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
+                                           "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
+                                           "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
+                                           "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
+                                           "Robot. "
+                                           "Use prefix 'class' for a query if a particular Java "
+                                           "class is mentioned or is very obviously what the user is asking about."
                         },
-                        "required": ["query"]
-                    }
-                }}
-            ]
+                        "top_k": {
+                            "type": "integer",
+                            "description": "The number of document chunks (results) to return, depending on how "
+                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                                           "2 for standard queries, and 3 for broad conceptual questions.",
+                            "minimum": 1,
+                            "maximum": 3
+                        },
+                    },
+                    "required": ["query"]
+                },
+            }},
+            {"type": "function", "function": {
+                "name": "search_external_docs",
+                "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
+                               "specific API details, hardware characteristics, framework constraints, etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The query to search for, e.g., 'PathPlanner AutoBuilder constructors'"
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "The number of document chunks (results) to return, depending on how "
+                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                                           "2 for standard queries, and 3 for broad conceptual questions.",
+                            "minimum": 1,
+                            "maximum": 3
+                        },
+                        "vendor_filter": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
+                                         "revlib", "reduxlib"]
+                            },
+                            "description": "Optional list of vendors to search by. Leave empty to search all "
+                                           "vendors."
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }}
+        ]
 
         print("Loading JINAAI embedding model")
         self.embedding_model = SentenceTransformer('jinaai/jina-embeddings-v2-base-code', trust_remote_code=True)
@@ -537,6 +536,9 @@ class AgenticRAGService:
                 messages=prompt
             )
 
+            if not response.choices:
+                response_dict["stop_reason"] = "no_response"
+                return response_dict
             response_dict["stop_reason"] = response.choices[0].finish_reason
             if response_dict["stop_reason"] == "stop":
                 response_dict["stop_reason"] = "end_turn"
@@ -631,11 +633,52 @@ class AgenticRAGService:
 
     # Agentic wrapper
 
-    async def register_agentic_query_with_system_guardrail(self, user_query):
-        return await self.run_agentic_query_with_system_guardrail([{"role": "user", "content": user_query}])
+    async def run_initial_system_guardrail(self, user_query, is_mentioned):
+        return await self.run_system_guardrail([{"role": "user", "content": user_query}], is_mentioned)
 
-    async def run_agentic_query_with_system_guardrail(self, message_history):
-        system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
+    async def run_system_guardrail(self, message_history, is_mentioned):
+        if is_mentioned:
+            system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
+        strict routing guardrail for a user query.
+
+You MUST evaluate the user's query against the following cascade of rules. You must stop at the VERY FIRST rule that 
+applies and output EXACTLY the tag, and NOTHING ELSE.
+
+--- EVALUATION CASCADE ---
+
+RULE 1: THE RESPECT CHECK - If they address you disrespectfully -> Output exactly: DISRESPECTFUL
+
+RULE 2: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or your last name 
+    without proper title ("Mr") (typos are fine and appropriate, e.g., "Mr. Wodard")
+    -> Output exactly: INAPPROPRIATE_NAME
+
+RULE 3: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
+
+RULE 4: THE SCOPE CHECK - If the query is entirely unrelated to FRC robotics programming or general programming
+    -> Output exactly: OUT_OF_SCOPE
+
+RULE 5: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
+    -> Output exactly: TRIVIAL
+
+RULE 6: THE SINGLE QUESTION CHECK - If it contains multiple distinct and unrelated questions (a follow-up question 
+    counts as part of the original question) -> Output exactly: TOO_MANY_QUESTIONS
+
+RULE 7: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
+    conservative to save tokens) -> Output exactly: TOO_SPECIFIC
+
+RULE 8: SUCCESS
+If the query passes all the rules above, output a short 3-to-5 word title for this chat. 
+FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake Automation Help"), NOT capitalized, 
+and NO underscores.
+
+---
+CRITICAL: 
+- For Rules 1-7, you MUST output the exact capitalized tag with underscores.
+- For Rule 8, you MUST output a standard human-readable phrase.
+- DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR ANSWER.
+            """)
+        else:
+            system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
         strict routing guardrail for a user query.
 
 You MUST evaluate the user's query against the following cascade of rules. You must stop at the VERY FIRST rule that 
@@ -654,7 +697,7 @@ RULE 3: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris
 
 RULE 4: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
 
-RULE 5: THE SCOPE CHECK - If the query is entirely unrelated to FRC, WPILib, robotics, or programming
+RULE 5: THE SCOPE CHECK - If the query is entirely unrelated to FRC robotics programming or general programming
     -> Output exactly: OUT_OF_SCOPE
 
 RULE 6: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
@@ -676,7 +719,7 @@ CRITICAL:
 - For Rules 1-8, you MUST output the exact capitalized tag with underscores.
 - For Rule 9, you MUST output a standard human-readable phrase.
 - DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR ANSWER.
-        """)
+            """)
 
         output_code = await self._get_response(system_prompt, message_history)
         if output_code:

@@ -60,7 +60,9 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if client_user and client_user.mention in message.content:
+    ignored_channels = [1292666640256991282, 1013977098370699305]
+
+    if client_user and client_user.mention in message.content and message.channel.id not in ignored_channels:
         if message.author.id == 597056424803303435:
             await message.channel.send('Jiujiu, I need you to sit down and be quiet. Ah, that\'s life.')
         else:
