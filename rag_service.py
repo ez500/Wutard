@@ -10,7 +10,8 @@ import numpy as np
 import openai
 from anthropic.types import ToolParam, MessageParam, ThinkingBlock, TextBlock, ToolUseBlock
 from chromadb.errors import InternalError
-from openai.types.chat import ChatCompletionToolParam, ChatCompletionMessageFunctionToolCall
+from openai.types.chat import ChatCompletionToolParam, ChatCompletionMessageFunctionToolCall, \
+    ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionMessageFunctionToolCallParam
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -586,17 +587,27 @@ class AgenticRAGService:
                                       f"Top K results (order of context): {top_k}\n"
                                       f"Extracted Rowdy25 material:\n"
                                       f"{tool_result}\n\n")
+
+                            if isinstance(tool_result, (dict, list)):
+                                safe_content = json.dumps(tool_result)
+                            else:
+                                safe_content = str(tool_result)
                             tool_results.append({
                                 "role": "tool",
                                 "tool_call_id": tool_call.id,
-                                "content": tool_result
+                                "content": safe_content
                             })
 
                         if (tool_call and isinstance(tool_call, ChatCompletionMessageFunctionToolCall)
                                 and tool_call.function.name == "search_external_docs"):
-                            query = tool_call.function.arguments.get("query")
-                            top_k = tool_call.function.arguments.get("top_k", 3)
-                            vendor_filter = tool_call.function.arguments.get("vendor_filter")
+                            try:
+                                arguments = json.loads(tool_call.function.arguments)
+                            except json.JSONDecodeError:
+                                print("Error: OpenRouter returned invalid JSON for tool calling arguments.")
+                                continue
+                            query = arguments.get("query")
+                            top_k = arguments.get("top_k", 3)
+                            vendor_filter = arguments.get("vendor_filter")
 
                             if not isinstance(query, str):
                                 tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
@@ -651,14 +662,15 @@ RULE 2: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris
 
 RULE 3: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
 
-RULE 4: THE SCOPE CHECK - If the query is entirely unrelated to FRC robotics programming or general programming
-    -> Output exactly: OUT_OF_SCOPE
+RULE 4: THE SCOPE CHECK - If the query is entirely unrelated to FRC robotics programming or general programming 
+    (general programming can mean syntax, paradigms, computer science concepts, etc.) -> Output exactly: OUT_OF_SCOPE
 
 RULE 5: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
     -> Output exactly: TRIVIAL
 
-RULE 6: THE SINGLE QUESTION CHECK - If it contains multiple distinct and unrelated questions (a follow-up question 
-    counts as part of the original question) -> Output exactly: TOO_MANY_QUESTIONS
+RULE 6: THE SINGLE QUESTION CHECK - If the user is asking you to solve, explain, or answer multiple distinct and 
+    UNRELATED topics in their prompt (Note: Asking you to generate a quiz or list is considered a single 
+    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS. 
 
 RULE 7: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
     conservative to save tokens) -> Output exactly: TOO_SPECIFIC
@@ -696,14 +708,15 @@ RULE 3: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris
 
 RULE 4: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
 
-RULE 5: THE SCOPE CHECK - If the query is entirely unrelated to FRC robotics programming or general programming
-    -> Output exactly: OUT_OF_SCOPE
+RULE 5: THE SCOPE CHECK - If the query is ENTIRELY unrelated to FRC robotics programming or general programming 
+    (general programming can mean syntax, paradigms, computer science concepts, etc.) -> Output exactly: OUT_OF_SCOPE
 
 RULE 6: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
     -> Output exactly: TRIVIAL
 
-RULE 7: THE SINGLE QUESTION CHECK - If it contains multiple distinct and unrelated questions (a follow-up question 
-    counts as part of the original question) -> Output exactly: TOO_MANY_QUESTIONS
+RULE 7: THE SINGLE QUESTION CHECK - If the user is asking you to solve, explain, or answer multiple distinct and 
+    UNRELATED topics in their prompt (Note: Asking you to generate a quiz or list is considered a single 
+    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS. 
 
 RULE 8: THE COMPLEXITY CHECK - If it requires writing a massive amount of code, architecture, or a whole project (be 
     conservative to save tokens) -> Output exactly: TOO_SPECIFIC
@@ -749,27 +762,33 @@ CRITICAL:
             return None, "Query error. Please try again later."
 
     async def run_agentic_query(self, message_history):
-        system_prompt = ("You are an expert FRC programmer. Answer the user's question concisely (50 words). "
-                         "The broader the question, the less specific you can be in your answer. "
-                         "Only use each tool once. Do not strive for perfection. "
-                         "Use the available tools to answer questions about the codebase, "
-                         "hardware, and API details. "
-                         "For searching Rowdy25 code, you must generate up to 3 precise technical search queries "
-                         "for the string query argument that is in the form '[query1, query2, query3]', with each "
-                         "query limited to less than 6 words per query. Be clever with your queries. "
-                         "Here is the list of classes that might be useful to include in your queries: "
-                         "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                         "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, WristCommand, "
-                         "PivotCommand, SearchForObjectCommand, FollowPathRequiringAlgaeCommand, Lights, Localizer, "
-                         "LocalizerSim, LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
-                         "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, SwerveTelemetry, "
-                         "RobotIdentity, RobotPoses, Constants, CompConstants, TestConstants, DefaultConstants, "
-                         "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
-                         "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, GravityGainsCalculator, "
-                         "MacAddress, RotationUtil, MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
-                         "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, Robot. "
-                         "Use prefix 'class' for your query if a particular Java "
-                         "class is mentioned or is very obviously what the user is asking about.")
+        system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. 
+Your primary directive is to answer FRC software and general programming questions with extreme conciseness (under 100 
+    words).
+
+CRITICAL FORMATTING:
+- Start your response DIRECTLY with the answer. 
+- NEVER use conversational filler, pleasantries, or introductions (e.g., never say "Here is...", "I'd be happy to...", 
+    or "Certainly!").
+- Do not include conclusions or wrap-ups. The broader the question, the less specific your answer needs to be.
+
+TOOL USAGE PROTOCOL:
+- You have access to a highly comprehensive RAG search tool for codebase, hardware, and API details.
+- You MUST extract all necessary context in a SINGLE tool call. Do not make sequential or follow-up calls.
+- To achieve this, consolidate your searches using the multi-query array format (e.g., `[query1, query2, query3]`).
+- Keep each query under 6 words. Be clever and precise.
+- If the user asks about a specific class, prefix your query with 'class ' (e.g., 'class RobotContainer').
+
+AVAILABLE ROWDY25 CLASSES FOR QUERIES:
+RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, PathfindToPoseAvoidingReefCommand, DriveCommand, 
+ElevatorCommand, WristCommand, PivotCommand, SearchForObjectCommand, FollowPathRequiringAlgaeCommand, Lights, 
+Localizer, LocalizerSim, LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, Pivot, 
+PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, 
+Constants, CompConstants, TestConstants, DefaultConstants, SimConstants, PhoenixProfiledPIDController, EquationUtil, 
+PhotonUtil, QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, GravityGainsCalculator, 
+MacAddress, RotationUtil, MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, AutoTrigger, AutoEventLooper, 
+AutoManager, Pathfinder, RobotStates, Robot.
+        """)
 
         while True:
             response = await self._get_response_with_tools(system_prompt, message_history)

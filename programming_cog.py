@@ -9,13 +9,13 @@ class Programming(commands.Cog):
         self.client = client
         self.rag_service = rag_service
 
-    @commands.hybrid_command(name='programminghelp', description='get briefed on how the llm feature should be used')
+    @commands.hybrid_command(name='programming_help', description='get briefed on how the llm feature should be used')
     async def programming_help(self, ctx):
         await ctx.send("Ah, how's it goin' ladies! I spent some time reading on FRC docs and Rowdy25. If you have any "
                        "questions feel free to head to <#1292666640256991282> and ask me for help. Make sure to get "
                        "my attention and ask your programming question.")
 
-    @commands.hybrid_command(name='togglellmmodel', description='toggle between the cheap and normal llm models')
+    @commands.hybrid_command(name='toggle_llm_model', description='toggle between the cheap and normal llm models')
     async def toggle_llm_model(self, ctx):
         if ctx.author.id == 434430979075997707:
             self.rag_service.premium_agent = not self.rag_service.premium_agent

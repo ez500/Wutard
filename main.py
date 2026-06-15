@@ -96,13 +96,13 @@ async def help(ctx):
                    allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=False))
 
 
-@client.hybrid_command(name='closeofbusiness', description='leave', aliases=['leave', 'close'])
-async def closeofbusiness(ctx):
+@client.hybrid_command(name='close_of_business', description='leave', aliases=['leave', 'close'])
+async def close_of_business(ctx):
     await ctx.send('Take care!')
 
 
-@client.hybrid_command(name='startofclass', description='start class', aliases=['start', 'startofdice'])
-async def startofclass(ctx):
+@client.hybrid_command(name='start_of_class', description='start class', aliases=['start', 'start_of_dice'])
+async def start_of_class(ctx):
     if random.randint(0, 1) == 0:
         message = 'Hello! How\'s it going. '
     else:
@@ -128,8 +128,8 @@ async def startofclass(ctx):
     await ctx.send(message)
 
 
-@client.hybrid_command(name='rollthedice', description='roll dice', aliases=['dice'])
-async def rollthedice(ctx):
+@client.hybrid_command(name='roll_the_dice', description='roll dice', aliases=['dice'])
+async def roll_the_dice(ctx):
     dice = random.randint(1, 6)
     if dice == 1:
         message = f'Everyone ready for the bell ringer? Time to roll the dice! It\'s a {dice}! Turn \'em in!' \
@@ -154,8 +154,8 @@ async def rollthedice(ctx):
     await ctx.send(message)
 
 
-@client.hybrid_command(name='lecturetime', description='it\'s lecture time', aliases=['lecture'])
-async def lecturetime(ctx):
+@client.hybrid_command(name='lecture_time', description='it\'s lecture time', aliases=['lecture'])
+async def lecture_time(ctx):
     lectures = ['Unit 1 Primitive Types', 'Unit 2 Using Objects', 'Unit 3 Boolean Expression and if Statements',
                 'Unit 4 Iteration', 'Unit 5 Writing Classes', 'Unit 6 Array', 'Unit 7 ArrayList', 'Unit 8 2DArray',
                 'Unit 9 Inheritance', 'Unit 10 Recursion']
@@ -170,7 +170,7 @@ async def lecturetime(ctx):
 
 
 @client.hybrid_command(name='chinese', description='ask woodard if he knows anything foreign',
-                       aliases=['foreignlanguage', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
+                       aliases=['foreign_language', 'black', 'muslim', 'hispanic', 'arab', 'korean'])
 async def chinese(ctx):
     ethnicities = ['Chinese', 'Japanese', 'Korean', 'Vietnamese', 'Filipino', 'Indian', 'Thai', 'Indonesian', 'African',
                    'South American', 'Native American', 'Middle Eastern', 'Muslim', 'Black', 'Hispanic', 'Minority']
@@ -190,7 +190,7 @@ async def slides(ctx, *, msg: str):
 
 
 @client.hybrid_command(name='calc1', description='ask woodard about his Calc 1 experience',
-                       aliases=['calcone', 'calc', 'calculus'])
+                       aliases=['calc_one', 'calc', 'calculus'])
 async def calc1(ctx):
     await ctx.send(
         'Ah, that\'s life. I took calc twice and failed, so I had to take it a third time. Third time\'s the charm! '
@@ -198,14 +198,14 @@ async def calc1(ctx):
 
 
 @client.hybrid_command(name='gpa', description='ask woodard about his gpa in college',
-                       aliases=['collegegpa', 'gpaincollege'])
+                       aliases=['college_gpa', 'gpa_in_college'])
 async def gpa(ctx):
     await ctx.send('Ah, not super. When I started college, my GPA was in the points! That\'s life.')
 
 
-@client.hybrid_command(name='worksmart', description='woodard likes to work smart by self plagiarizing!',
-                       aliases=['plagiarize', 'selfplagiarize'])
-async def worksmart(ctx):
+@client.hybrid_command(name='work_smart', description='woodard likes to work smart by self plagiarizing!',
+                       aliases=['plagiarize', 'self_plagiarize'])
+async def work_smart(ctx):
     await ctx.send(
         'Ah, super! Remember to work smart, as I did in college, when I turned in a paper I had for an assignment in '
         'a previous'
