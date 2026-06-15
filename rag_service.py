@@ -625,20 +625,44 @@ class AgenticRAGService:
         return await self.run_agentic_query_with_system_guardrail([{"role": "user", "content": user_query}])
 
     async def run_agentic_query_with_system_guardrail(self, message_history):
-        system_prompt = ("You are an expert FRC programmer. Evaluate the following user query. If it is not explicitly "
-                         "related to WPILib, FRC, and robotics programming, output exactly 'OUT_OF_SCOPE' and nothing "
-                         "else. If it is more than one question, output exactly 'TOO_MANY_QUESTIONS' and nothing else. "
-                         "If the conversation is going in a direction where you have to start implementing entire "
-                         "projects that require significant token usage (please be relatively conservative/strict), "
-                         "output exactly 'TOO_SPECIFIC' and nothing else. The idea is to try to keep it so "
-                         "you can conserve token usage and use less of it on generative coding."
-                         "If it is a trivial question, output exactly 'TRIVIAL' and nothing else. Otherwise, output "
-                         "a short phrase that describes the user's intent (like a title of a chat). "
+        system_prompt = ("You are Mr. Christopher Woodard, an expert FRC programmer. Evaluate the following user "
+                         "query in the following order:\n"
+                         "(1) If the query does not directly address you (that is, the user says your name, or "
+                         "says something to explicitly try to get your attention), output exactly 'NOT_FOR_ME' "
+                         "and nothing else.\n"
+                         "(2a) Otherwise, if the query doesn't address you respectfully, output exactly "
+                         "'DISRESPECTFUL' and nothing else.\n"
+                         "(2b) Otherwise, if the query addresses you by your first name, output exactly 'FIRST_NAME' "
+                         "and nothing else.\n"
+                         "(2c) Otherwise, if the user is asking to go to the bathroom, output 'BATHROOM' and nothing "
+                         "else.\n"
+                         "(3) Otherwise, if the query is not explicitly related to WPILib, FRC, and/or robotics "
+                         "software/programming, output exactly 'OUT_OF_SCOPE' and nothing else.\n"
+                         "(4) Otherwise, if the query is a trivial question, output exactly 'TRIVIAL' and nothing "
+                         "else.\n"
+                         "(5) Otherwise, if it is more than one question, output exactly 'TOO_MANY_QUESTIONS' and "
+                         "nothing else.\n"
+                         "(6) Otherwise, if the conversation is going in a direction where you have to start "
+                         "implementing entire projects that require significant token usage (please be relatively "
+                         "conservative/strict), output exactly 'TOO_SPECIFIC' and nothing else (The idea is to try to "
+                         "keep it so you can conserve token usage and use less of it on generative coding).\n"
+                         "(7) Otherwise, output a short phrase that describes the user's intent (like a title of a "
+                         "chat).\n"
                          "DO NOT APPEND ANY EXPLANATION TO YOUR ANSWER.")
 
         output_code = await self._get_response(system_prompt, message_history)
         if output_code:
-            if 'OUT_OF_SCOPE' in output_code or 'TRIVIAL' in output_code:
+            if 'NOT_FOR_ME' in output_code:
+                return None, output_code, None
+            elif 'DISRESPECTFUL' in output_code:
+                return (None, output_code,
+                        "Ah, please go sit down. If you're disrespectful again we're going to have to talk after COB "
+                        "and I'm going to have to send you to HR. Not super.")
+            elif 'FIRST_NAME' in output_code:
+                return None, output_code, "Ah, that's actually Mr. Woodard to you. Please ask again in a nicer manner."
+            elif 'BATHROOM' in output_code:
+                return None, output_code, "Of course. Ah, send me an email. Super!"
+            elif 'OUT_OF_SCOPE' in output_code or 'TRIVIAL' in output_code:
                 return None, output_code, "I'm sorry, you're going to have to ask Geeson over there. That's life!"
             elif 'TOO_MANY_QUESTIONS' in output_code:
                 return (None, output_code,
