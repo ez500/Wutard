@@ -37,21 +37,25 @@ class Programming(commands.Cog):
 
                     role = "assistant" if past_msg.author == self.client.user else "user"
                     conversation_history.append({"role": role, "content": past_msg.clean_content})
-                _, response = (
+                _, output_code, response = (
                     await self.rag_service.run_agentic_query_with_system_guardrail(conversation_history)
                 )
-                print(response)
+                print(output_code)
+                print(response + "\n")
                 await message.channel.send(response)
         else:
-            async with message.channel.typing():
-                title, response = await self.rag_service.register_agentic_query_with_system_guardrail(message.content)
-                print(response)
+            async with ((message.channel.typing())):
+                title, output_code, response = await self.rag_service.register_agentic_query_with_system_guardrail(
+                    message.content
+                )
+                print(output_code)
+                print(response + "\n")
                 if title:
                     try:
                         new_thread = await message.create_thread(name=title, auto_archive_duration=60)
                         await new_thread.send(response)
                     except discord.HTTPException as e:
-                        print(f"Failed to create thread: {e}")
+                        print(f"Failed to create thread: {e}\n")
                         await message.channel.send("I am not able to create threads. I guess I can't help. Not super!")
                 else:
                     await message.channel.send(response)

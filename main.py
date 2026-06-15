@@ -36,7 +36,7 @@ client = WutardBot()
 @client.event
 async def on_ready():
     await client.change_presence(status=discord.Status.idle, activity=discord.Game(name='Ahh..Super!'))
-    print('Logged in')
+    print('Logged in\n')
 
 
 @client.event

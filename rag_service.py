@@ -22,7 +22,7 @@ STOP_WORDS = {"the", "a", "an", "and", "or", "but", "is", "in", "to", "of", "it"
 
 
 class AgenticRAGService:
-    def __init__(self, is_claude=True):
+    def __init__(self, is_claude=False):
         print("Starting asynchronous Agentic RAG setup")
 
         self.premium_agent = is_claude
@@ -205,7 +205,7 @@ class AgenticRAGService:
         self.bm25_code, self.code_ids = self._build_bm25_index(self.code_collection)
         self.bm25_external_docs, self.external_docs_ids = self._build_bm25_index(self.external_docs_collection)
 
-        print("Agentic RAG setup complete.\n\n")
+        print("Agentic RAG setup complete.")
 
     # Internal Helpers
 
@@ -633,19 +633,20 @@ class AgenticRAGService:
                          "output exactly 'TOO_SPECIFIC' and nothing else. The idea is to try to keep it so "
                          "you can conserve token usage and use less of it on generative coding."
                          "If it is a trivial question, output exactly 'TRIVIAL' and nothing else. Otherwise, output "
-                         "a short phrase that describes the user's intent (like a title of a chat).")
+                         "a short phrase that describes the user's intent (like a title of a chat). "
+                         "DO NOT APPEND ANY EXPLANATION TO YOUR ANSWER.")
 
         output_code = await self._get_response(system_prompt, message_history)
         if output_code:
-            print(output_code + "\n")
-            if output_code == 'OUT_OF_SCOPE' or output_code == 'TRIVIAL':
-                return None, "I'm sorry, you're going to have to ask Geeson over there. That's life!"
-            elif output_code == 'TOO_MANY_QUESTIONS':
-                return None, "Sorry, I can't answer that. I can only answer a single question at a time. That's life!"
-            elif output_code == 'TOO_SPECIFIC':
-                return None, "Sorry, I can't help you cheat. Not super! That's life. Maybe ask Geeson."
+            if 'OUT_OF_SCOPE' in output_code or 'TRIVIAL' in output_code:
+                return None, output_code, "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+            elif 'TOO_MANY_QUESTIONS' in output_code:
+                return (None, output_code,
+                        "Sorry, I can't answer that. I can only answer a single question at a time. That's life!")
+            elif 'TOO_SPECIFIC' in output_code:
+                return None, output_code, "Sorry, I can't help you cheat. Not super! That's life. Maybe ask Geeson."
             else:
-                return output_code, await self.run_agentic_query(message_history)
+                return output_code, 'GOOD', await self.run_agentic_query(message_history)
         else:
             return None, "Query error. Please try again later."
 
