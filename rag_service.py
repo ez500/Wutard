@@ -15,8 +15,8 @@ from sentence_transformers import SentenceTransformer
 
 with open('claude_key', 'r') as f:
     claude_api_key = f.readline().strip()
-with open('openai_key', 'r') as f:
-    openai_api_key = f.readline().strip()
+with open('openrouter_key', 'r') as f:
+    openrouter_api_key = f.readline().strip()
 
 STOP_WORDS = {"the", "a", "an", "and", "or", "but", "is", "in", "to", "of", "it", "for"}
 
@@ -109,7 +109,7 @@ class AgenticRAGService:
             ]
         else:
             print("Loading OpenRouter Client")
-            self.openrouter_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openai_api_key)
+            self.openrouter_client = openai.AsyncClient(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
             self.openrouter_tool_schema: list[ChatCompletionToolParam] = [
                 {"type": "function", "function": {
                     "name": "search_rowdy25",
