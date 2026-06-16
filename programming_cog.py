@@ -43,13 +43,14 @@ class Programming(commands.Cog):
                 if past_msg.author == client_user:
                     is_listening_thread = True
                     break
-        is_mentioned = client_user in message.mentions or is_listening_thread
+        is_mentioned = client_user in message.mentions
 
         if not (is_valid_channel or is_valid_thread):
             return
 
         filter_words = ["woodard", "chris", "rowdy", "rowdy25", "bot", "code", "coding", "java"]
-        if not any(word in message.content.lower() for word in filter_words) and not is_mentioned:
+        if (not any(word in message.content.lower() for word in filter_words) and not is_mentioned
+                and not is_listening_thread):
             return
 
         print(f"User {message.author} registered query: {message.content}\n")
@@ -63,7 +64,7 @@ class Programming(commands.Cog):
                 conversation_history.append({"role": role, "content": past_msg.clean_content})
 
             _, output_code, response = (
-                await self.rag_service.run_system_guardrail(conversation_history[-1]["content"], is_mentioned)
+                await self.rag_service.run_system_guardrail(conversation_history, is_mentioned)
             )
             print(f"Evaluated as: {output_code}")
             if "GOOD" in output_code:
@@ -76,7 +77,7 @@ class Programming(commands.Cog):
                 await message.channel.send(response)
         else:
             title, output_code, response = await self.rag_service.run_system_guardrail(
-                message.content, is_mentioned
+                [{"role": "user", "content": message.content}], is_mentioned
             )
             print(f"Evaluated as: {output_code}")
             if title:

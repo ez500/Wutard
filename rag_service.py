@@ -38,33 +38,30 @@ class AgenticRAGService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The string query argument that is in the form '[query1, query2, "
-                                           "query3]', with each query limited to less than 6 words per query. "
-                                           "Here is the list of classes that might be useful to include in the "
-                                           "queries: "
-                                           "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                                           "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
-                                           "WristCommand, PivotCommand, SearchForObjectCommand, "
+                        "queries": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "A list of up to 3 highly specific search queries. Keep each query under "
+                                           "6 words. Use prefix 'class ' if a particular Java class is requested. "
+                                           "Useful classes: RobotContainer, Main, IntakeCommand, "
+                                           "DirectMoveToPoseCommand, PathfindToPoseAvoidingReefCommand, DriveCommand, "
+                                           "ElevatorCommand, WristCommand, PivotCommand, SearchForObjectCommand, "
                                            "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
-                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
-                                           "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
-                                           "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
-                                           "Constants, CompConstants, TestConstants, DefaultConstants, "
-                                           "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
-                                           "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
-                                           "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
-                                           "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
-                                           "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
-                                           "Robot. "
-                                           "Use prefix 'class' for a query if a particular Java "
-                                           "class is mentioned or is very obviously what the user is asking about."
+                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
+                                           "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, "
+                                           "SwerveTelemetry, RobotIdentity, RobotPoses, Constants, CompConstants, "
+                                           "TestConstants, DefaultConstants, SimConstants, "
+                                           "PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
+                                           "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, "
+                                           "GravityGainsCalculator, MacAddress, RotationUtil, MultipleChooser, "
+                                           "ProfiledExpEndController, FieldUtil, SysID, AutoTrigger, AutoEventLooper, "
+                                           "AutoManager, Pathfinder, RobotStates, Robot."
                         },
                         "top_k": {
                             "type": "integer",
-                            "description": "The number of document chunks (results) to return, depending on how "
-                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                            "description": "The number of document chunks to return. Use 1 for specific API checks, "
                                            "2 for standard queries, and 3 for broad conceptual questions.",
                             "minimum": 1,
                             "maximum": 3
@@ -86,8 +83,7 @@ class AgenticRAGService:
                         },
                         "top_k": {
                             "type": "integer",
-                            "description": "The number of document chunks (results) to return, depending on how "
-                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                            "description": "The number of document chunks to return. Use 1 for specific API checks, "
                                            "2 for standard queries, and 3 for broad conceptual questions.",
                             "minimum": 1,
                             "maximum": 3
@@ -99,8 +95,9 @@ class AgenticRAGService:
                                 "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
                                          "revlib", "reduxlib"]
                             },
-                            "description": "Optional list of vendors to search by. Leave empty to search all "
-                                           "vendors."
+                            "description": "Optional list of vendors to search by. MUST be formatted as a valid "
+                                           "JSON array of strings (e.g., [\"wpilib\", \"revlib\"]). Leave empty to "
+                                           "search all vendors."
                         }
                     },
                     "required": ["query"]
@@ -119,44 +116,41 @@ class AgenticRAGService:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The string query argument that is in the form '[query1, query2, "
-                                           "query3]', with each query limited to less than 6 words per query. "
-                                           "Here is the list of classes that might be useful to include in the "
-                                           "queries: "
-                                           "RobotContainer, Main, IntakeCommand, DirectMoveToPoseCommand, "
-                                           "PathfindToPoseAvoidingReefCommand, DriveCommand, ElevatorCommand, "
-                                           "WristCommand, PivotCommand, SearchForObjectCommand, "
+                        "queries": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "A list of up to 3 highly specific search queries. Keep each query under "
+                                           "6 words. Use prefix 'class ' if a particular Java class is requested. "
+                                           "Useful classes: RobotContainer, Main, IntakeCommand, "
+                                           "DirectMoveToPoseCommand, PathfindToPoseAvoidingReefCommand, DriveCommand, "
+                                           "ElevatorCommand, WristCommand, PivotCommand, SearchForObjectCommand, "
                                            "FollowPathRequiringAlgaeCommand, Lights, Localizer, LocalizerSim, "
-                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, "
-                                           "Elevator, Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, "
-                                           "SwerveSim, Song, SwerveTelemetry, RobotIdentity, RobotPoses, "
-                                           "Constants, CompConstants, TestConstants, DefaultConstants, "
-                                           "SimConstants, PhoenixProfiledPIDController, EquationUtil, PhotonUtil, "
-                                           "QuestNavUtil, LimelightUtil, Elastic, DoubleTrueTrigger, "
-                                           "EstimatedRobotPose, GravityGainsCalculator, MacAddress, RotationUtil, "
-                                           "MultipleChooser, ProfiledExpEndController, FieldUtil, SysID, "
-                                           "AutoTrigger, AutoEventLooper, AutoManager, Pathfinder, RobotStates, "
-                                           "Robot. "
-                                           "Use prefix 'class' for a query if a particular Java "
-                                           "class is mentioned or is very obviously what the user is asking about."
+                                           "LocalizationTelemetry, Wrist, WristTelemetry, ElevatorTelemetry, Elevator, "
+                                           "Pivot, PivotTelemetry, IntakeTelemetry, Intake, Swerve, SwerveSim, Song, "
+                                           "SwerveTelemetry, RobotIdentity, RobotPoses, Constants, CompConstants, "
+                                           "TestConstants, DefaultConstants, SimConstants, "
+                                           "PhoenixProfiledPIDController, EquationUtil, PhotonUtil, QuestNavUtil, "
+                                           "LimelightUtil, Elastic, DoubleTrueTrigger, EstimatedRobotPose, "
+                                           "GravityGainsCalculator, MacAddress, RotationUtil, MultipleChooser, "
+                                           "ProfiledExpEndController, FieldUtil, SysID, AutoTrigger, AutoEventLooper, "
+                                           "AutoManager, Pathfinder, RobotStates, Robot."
                         },
                         "top_k": {
                             "type": "integer",
-                            "description": "The number of document chunks (results) to return, depending on how "
-                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                            "description": "The number of document chunks to return. Use 1 for specific API checks, "
                                            "2 for standard queries, and 3 for broad conceptual questions.",
                             "minimum": 1,
                             "maximum": 3
                         },
                     },
-                    "required": ["query"]
+                    "required": ["queries"]
                 },
             }},
             {"type": "function", "function": {
                 "name": "search_external_docs",
-                "description": "Searches the WPILib and vendor dependency documentation. Use this when you need"
+                "description": "Searches the WPILib and vendor dependency documentation. Use this when you need "
                                "specific API details, hardware characteristics, framework constraints, etc.",
                 "parameters": {
                     "type": "object",
@@ -167,8 +161,7 @@ class AgenticRAGService:
                         },
                         "top_k": {
                             "type": "integer",
-                            "description": "The number of document chunks (results) to return, depending on how "
-                                           "large or broad in scope the query is. Use 1 for specific API checks, "
+                            "description": "The number of document chunks to return. Use 1 for specific API checks, "
                                            "2 for standard queries, and 3 for broad conceptual questions.",
                             "minimum": 1,
                             "maximum": 3
@@ -177,11 +170,11 @@ class AgenticRAGService:
                             "type": "array",
                             "items": {
                                 "type": "string",
-                                "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner",
-                                         "revlib", "reduxlib"]
+                                "enum": ["wpilib", "doglog", "photonlib", "phoenix6", "pathplanner", "revlib", "reduxlib"]
                             },
-                            "description": "Optional list of vendors to search by. Leave empty to search all "
-                                           "vendors."
+                            "description": "Optional list of vendors to search by. MUST be formatted as a valid "
+                                           "JSON array of strings (e.g., [\"wpilib\", \"revlib\"]). Leave empty to "
+                                           "search all vendors."
                         }
                     },
                     "required": ["query"]
@@ -415,9 +408,9 @@ class AgenticRAGService:
                 final_answer = re.sub(r'<think>.*?</think>', '', final_answer, flags=re.DOTALL).strip()
         return thinking_text, final_answer
 
-    async def _get_response(self, system_prompt, message_history):
+    async def _get_system_guardrail_response(self, system_prompt, message_history):
         if self.premium_agent:
-            print("Sending prompt to Agent (Claude)...\n")
+            print("Sending prompt to system guardrail Agent (Claude)...\n")
             response = await self.claude_client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=2048,
@@ -427,7 +420,7 @@ class AgenticRAGService:
             text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
             return text_block.text if text_block else None
         else:
-            print("Sending prompt to Agent (OpenRouter)...\n")
+            print("Sending prompt to system guardrail Agent (OpenRouter)...\n")
             prompt = [{"role": "system", "content": system_prompt}] + message_history
             response = await self.openrouter_client.chat.completions.create(
                 model="nex-agi/nex-n2-pro:free",
@@ -443,7 +436,7 @@ class AgenticRAGService:
         response_dict = dict()
 
         if self.premium_agent:
-            print("Sending prompt to Agent (Claude)...\n")
+            print("Sending prompt to FRC programming expert Agent (Claude)...\n")
             response = await self.claude_client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=2048,
@@ -466,7 +459,8 @@ class AgenticRAGService:
                 if text_block:
                     response_dict["content"] = text_block.text
                 else:
-                    response_dict["content"] = "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+                    response_dict["content"] = ("I'm sorry, I lost the dictionary that I need to teach you, "
+                                                "so you're going to have to ask Geeson over there. That's life!")
 
             elif response_dict["stop_reason"] == "tool_use":
                 print(f"External documentation required, deploying retrieval\n")
@@ -476,15 +470,16 @@ class AgenticRAGService:
                 tool_results = []
                 for tool_call in tool_blocks:
                     if tool_call and tool_call.name == "search_rowdy25":
-                        query = tool_call.input.get("query")
+                        queries = tool_call.input.get("queries", [])
                         top_k = tool_call.input.get("top_k", 3)
 
-                        if not isinstance(query, str):
-                            tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                        if not isinstance(queries, list):
+                            tool_result = "Invalid tool input: expected 'queries' to be an array. Retry the tool."
                             print("Failed searching for Rowdy25 docs, invalid inputs.")
                         else:
                             if not isinstance(top_k, int):
                                 top_k = 3
+                            query = ', '.join(queries)
                             tool_result = self.search_rowdy25(query, top_k)
                             print(f"\nSearching for Rowdy25 docs!\n"
                                   f"Query: {query}\n"
@@ -508,7 +503,6 @@ class AgenticRAGService:
                         else:
                             if not isinstance(top_k, int):
                                 top_k = 3
-
                             if not isinstance(vendor_filter, list):
                                 vendor_filter = None
                             else:
@@ -528,7 +522,7 @@ class AgenticRAGService:
                 response_dict["tool_results"] = tool_results
         else:
             prompt = [{"role": "system", "content": system_prompt}] + message_history
-            print("Sending prompt to Agent (OpenRouter)...\n")
+            print("Sending prompt to FRC programming expert Agent (OpenRouter)...\n")
             response = await self.openrouter_client.chat.completions.create(
                 model="nex-agi/nex-n2-pro:free",
                 max_tokens=2048,
@@ -553,7 +547,8 @@ class AgenticRAGService:
                 if final:
                     response_dict["content"] = final
                 else:
-                    response_dict["content"] = "I'm sorry, you're going to have to ask Geeson over there. That's life!"
+                    response_dict["content"] = ("I'm sorry, I lost the dictionary that I need to teach you, "
+                                                "so you're going to have to ask Geeson over there. That's life!")
 
             elif response_dict["stop_reason"] == "tool_calls":
                 response_dict["stop_reason"] = "tool_use"
@@ -569,19 +564,20 @@ class AgenticRAGService:
                             try:
                                 arguments = json.loads(tool_call.function.arguments)
                             except json.JSONDecodeError:
-                                # TODO FIX THIS
-                                print("Error: OpenRouter returned invalid JSON for tool calling arguments:")
+                                print("Error: OpenRouter returned invalid JSON for search_rowdy25 tool calling"
+                                      " arguments:")
                                 print(tool_call.function.arguments)
                                 continue
-                            query = arguments.get("query")
+                            queries = arguments.get("queries", [])
                             top_k = arguments.get("top_k", 3)
 
-                            if not isinstance(query, str):
-                                tool_result = "Invalid tool input: expected 'query' to be a string. Retry the tool."
+                            if not isinstance(queries, list):
+                                tool_result = "Invalid tool input: expected 'queries' to be an array. Retry the tool."
                                 print("Failed searching for Rowdy25 docs, invalid inputs.")
                             else:
                                 if not isinstance(top_k, int):
                                     top_k = 3
+                                query = ', '.join(queries)
                                 tool_result = self.search_rowdy25(query, top_k)
                                 print(f"\nSearching for Rowdy25 docs!\n"
                                       f"Query: {query}\n"
@@ -603,9 +599,11 @@ class AgenticRAGService:
                                 and tool_call.function.name == "search_external_docs"):
                             try:
                                 arguments = json.loads(tool_call.function.arguments)
-                            except json.JSONDecodeError:
-                                print("Error: OpenRouter returned invalid JSON for tool calling arguments:")
+                            except json.JSONDecodeError as e:
+                                print("Error: OpenRouter returned invalid JSON for search_external_docs tool calling"
+                                      " arguments:")
                                 print(tool_call.function.arguments)
+                                print(f"Traceback:\n{e}")
                                 continue
                             query = arguments.get("query")
                             top_k = arguments.get("top_k", 3)
@@ -617,7 +615,6 @@ class AgenticRAGService:
                             else:
                                 if not isinstance(top_k, int):
                                     top_k = 3
-
                                 if not isinstance(vendor_filter, list):
                                     vendor_filter = None
                                 else:
@@ -648,45 +645,50 @@ class AgenticRAGService:
 
     # TODO TEST PROMPTS
     # TODO INCLUDE CONTEXT FOR BETTER EVALUATION
-    async def run_system_guardrail(self, message, is_mentioned):
+    async def run_system_guardrail(self, convo_param, is_mentioned):
         if is_mentioned:
             system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
-        strict routing guardrail for a user query.
+strict routing guardrail for a user query.
 
-You MUST evaluate the user's query against the following cascade of rules. You must stop at the VERY FIRST rule that 
-applies and output EXACTLY the tag, and NOTHING ELSE.
+CONTEXT RESOLUTION RULE:
+You will be provided with a conversation history. You MUST use the history to understand the intent and resolve 
+ambiguous pronouns (e.g., "that", "it", "how do I do this") in the LATEST query before evaluating it.
+
+You MUST evaluate the LATEST query against the following cascade of rules. 
+You must stop at the VERY FIRST rule that applies and output EXACTLY the tag, and NOTHING ELSE.
 
 --- EVALUATION CASCADE ---
 
-RULE 1: THE RESPECT CHECK - If they address you disrespectfully -> Output exactly: DISRESPECTFUL
+RULE 1: THE RESPECT CHECK - If the latest query addresses you disrespectfully -> Output exactly: DISRESPECTFUL
 
-RULE 2: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or by your last 
-name alone without "Mr." (e.g., "Woodard", "woodard") (Note: Typos with the title like "Mr. Wodard" are acceptable). 
-    -> Output exactly: INAPPROPRIATE_NAME.
+RULE 2: THE APPROPRIATE NAME CHECK - If the latest query calls you by your first name ("Chris" or "Christopher") 
+or by your last name alone without "Mr." (e.g., "Woodard", "woodard") 
+(Note: Typos with the title like "Mr. Wodard" are acceptable). -> Output exactly: INAPPROPRIATE_NAME.
 
-RULE 3: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
+RULE 3: THE BATHROOM CHECK - If the latest query is asking for permission to go to the bathroom
+ -> Output exactly: BATHROOM
 
-RULE 4: THE SCOPE CHECK - If the query is ENTIRELY unrelated to FRC robotics, software development, or general 
-programming (which includes syntax, paradigms, CS concepts, and beginner coding exercises/projects) 
-    -> Output exactly: OUT_OF_SCOPE
+RULE 4: THE SCOPE CHECK - If the latest query (when evaluated with its conversation context) is ENTIRELY unrelated 
+to FRC robotics, software development, or general programming (syntax, paradigms, CS concepts, beginner projects)
+ -> Output exactly: OUT_OF_SCOPE. 
 
-RULE 5: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
-    -> Output exactly: TRIVIAL
+RULE 5: THE TRIVIAL CHECK - If the latest query is a completely silly or mathematically trivial question 
+(e.g., "2 + 2", "what is a tree"), even when considering the conversation history -> Output exactly: TRIVIAL
 
-RULE 6: THE SINGLE QUESTION CHECK - If the user is asking you to solve, explain, or answer multiple distinct and 
-    UNRELATED topics in their prompt (Note: Asking you to generate a quiz or list is considered a single 
-    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS.
+RULE 6: THE SINGLE QUESTION CHECK - If the latest query asks you to solve, explain, or answer multiple distinct 
+and UNRELATED topics (Note: Asking to generate a quiz/list is considered a single unified request).
+ -> Output exactly: TOO_MANY_QUESTIONS.
 
-RULE 7: THE COMPLEXITY CHECK - If the user asks you to WRITE the massive amount of code required for a full 
-    architecture or whole project (Note: Asking for a high-level outline or a step-by-step guide for a project is 
-    perfectly acceptable and should NOT trigger this rule). -> Output exactly: TOO_SPECIFIC.
+RULE 7: THE COMPLEXITY CHECK - If the latest query asks you to WRITE the massive amount of code required for a full 
+architecture or whole project (Note: Asking for a high-level outline or a step-by-step guide is acceptable and 
+should NOT trigger this rule). -> Output exactly: TOO_SPECIFIC.
 
-RULE 8: THE TEXT CHECK - If it requires generating anything other than text -> Output exactly: NOT_TEXT
+RULE 8: THE TEXT CHECK - If the latest query requires generating anything other than text -> Output exactly: NOT_TEXT
 
 RULE 9: SUCCESS
-If the query passes all the rules above, output a short 3-to-5 word title for this chat. 
-FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake Automation Help"), NOT capitalized, 
-and NO underscores.
+If the latest query passes all the rules above, output a short 3-to-5 word title for this chat. 
+FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake automation help"), 
+NOT capitalized, and NO underscores.
 
 ---
 CRITICAL: 
@@ -696,45 +698,51 @@ CRITICAL:
             """)
         else:
             system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer. Your task is to act as a 
-        strict routing guardrail for a user query.
+strict routing guardrail for a user query.
 
-You MUST evaluate the user's query against the following cascade of rules. You must stop at the VERY FIRST rule that 
-applies and output EXACTLY the tag, and NOTHING ELSE.
+CONTEXT RESOLUTION RULE:
+You will be provided with a conversation history. You MUST use the history to understand the intent and resolve 
+ambiguous pronouns (e.g., "that", "it", "how do I do this") in the LATEST query before evaluating it.
+
+You MUST evaluate the LATEST query against the following cascade of rules. 
+You must stop at the VERY FIRST rule that applies and output EXACTLY the tag, and NOTHING ELSE.
 
 --- EVALUATION CASCADE ---
 
-RULE 1: THE INVOCATION CHECK - Does the text explicitly contain a variation of your name to get your attention (e.g., 
-"Mr. Woodard", "Woodard", "Chris", "Christopher")? - If NO -> Output exactly: NOT_FOR_ME
+RULE 1: THE INVOCATION CHECK - If the latest query does NOT explicitly contain a variation of your name to get your 
+attention (e.g., "Mr. Woodard", "mr woodard", "woodard", "Chris") regardless of capitalization or punctuation
+ -> Output exactly: NOT_FOR_ME.
 
-RULE 2: THE RESPECT CHECK - If they address you disrespectfully -> Output exactly: DISRESPECTFUL
+RULE 2: THE RESPECT CHECK - If the latest query addresses you disrespectfully -> Output exactly: DISRESPECTFUL
 
-RULE 3: THE APPROPRIATE NAME CHECK - If they call you by your first name ("Chris" or "Christopher") or by your last 
-name alone without "Mr." (e.g., "Woodard", "woodard") (Note: Typos with the title like "Mr. Wodard" are acceptable). 
-    -> Output exactly: INAPPROPRIATE_NAME.
+RULE 3: THE APPROPRIATE NAME CHECK - If the latest query calls you by your first name ("Chris" or "Christopher") 
+or by your last name alone without "Mr." (e.g., "Woodard", "woodard") 
+(Note: Typos with the title like "Mr. Wodard" are acceptable). -> Output exactly: INAPPROPRIATE_NAME.
 
-RULE 4: THE BATHROOM CHECK - If they are asking for permission to go to the bathroom -> Output exactly: BATHROOM
+RULE 4: THE BATHROOM CHECK - If the latest query is asking for permission to go to the bathroom
+ -> Output exactly: BATHROOM
 
-RULE 5: THE SCOPE CHECK - If the query is ENTIRELY unrelated to FRC robotics, software development, or general 
-programming (which includes syntax, paradigms, CS concepts, and beginner coding exercises/projects) 
-    -> Output exactly: OUT_OF_SCOPE
+RULE 5: THE SCOPE CHECK - If the latest query (when evaluated with its conversation context) is ENTIRELY unrelated 
+to FRC robotics, software development, or general programming (syntax, paradigms, CS concepts, beginner projects)
+ -> Output exactly: OUT_OF_SCOPE. 
 
-RULE 6: THE TRIVIAL CHECK - If it is a silly or trivial question (e.g., 2 + 2, what is a tree)
-    -> Output exactly: TRIVIAL
+RULE 6: THE TRIVIAL CHECK - If the latest query is a completely silly or mathematically trivial question 
+(e.g., "2 + 2", "what is a tree"), even when considering the conversation history -> Output exactly: TRIVIAL
 
-RULE 7: THE SINGLE QUESTION CHECK - If the user is asking you to solve, explain, or answer multiple distinct and 
-    UNRELATED topics in their prompt (Note: Asking you to generate a quiz or list is considered a single 
-    unified request, as long as it covers a related topic). -> Output exactly: TOO_MANY_QUESTIONS.
+RULE 7: THE SINGLE QUESTION CHECK - If the latest query asks you to solve, explain, or answer multiple distinct 
+and UNRELATED topics (Note: Asking to generate a quiz/list is considered a single unified request).
+ -> Output exactly: TOO_MANY_QUESTIONS.
 
-RULE 8: THE COMPLEXITY CHECK - If the user asks you to WRITE the massive amount of code required for a full 
-    architecture or whole project (Note: Asking for a high-level outline or a step-by-step guide for a project is 
-    perfectly acceptable and should NOT trigger this rule). -> Output exactly: TOO_SPECIFIC.
+RULE 8: THE COMPLEXITY CHECK - If the latest query asks you to WRITE the massive amount of code required for a full 
+architecture or whole project (Note: Asking for a high-level outline or a step-by-step guide is acceptable and 
+should NOT trigger this rule). -> Output exactly: TOO_SPECIFIC.
 
-RULE 9: THE TEXT CHECK - If it requires generating anything other than text -> Output exactly: NOT_TEXT
+RULE 9: THE TEXT CHECK - If the latest query requires generating anything other than text -> Output exactly: NOT_TEXT
 
 RULE 10: SUCCESS
-If the query passes all the rules above, output a short 3-to-5 word title for this chat. 
-FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake Automation Help"), NOT capitalized, 
-and NO underscores.
+If the latest query passes all the rules above, output a short 3-to-5 word title for this chat. 
+FORMATTING REQUIREMENT: Output the title using Normal Sentence Case (e.g., "Intake automation help"), 
+NOT capitalized, and NO underscores.
 
 ---
 CRITICAL: 
@@ -743,8 +751,7 @@ CRITICAL:
 - DO NOT APPEND ANY EXPLANATION, PUNCTUATION, OR REASONING TO YOUR ANSWER.
             """)
 
-        conversation = [{"role": "user", "content": message}]
-        output_code = await self._get_response(system_prompt, conversation)
+        output_code = await self._get_system_guardrail_response(system_prompt, convo_param)
         if output_code:
             if 'NOT_FOR_ME' in output_code:
                 return None, output_code, None
@@ -765,7 +772,7 @@ CRITICAL:
             elif 'TOO_SPECIFIC' in output_code:
                 return None, output_code, "Sorry, I can't help you cheat. Not super! That's life. Maybe ask Geeson."
             else:
-                return output_code, 'GOOD', conversation
+                return output_code, 'GOOD', convo_param
         else:
             return None, "Query error. Please try again later."
 
