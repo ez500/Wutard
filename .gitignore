@@ -166,5 +166,3 @@ discord_token
 claude_key
 openrouter_key
 
-# Code embeddings
-code_doc_embeddings/db/
