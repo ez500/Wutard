@@ -20,6 +20,10 @@ with open('openrouter_key', 'r') as f:
     openrouter_api_key = f.readline().strip()
 
 STOP_WORDS = {"the", "a", "an", "and", "or", "but", "is", "in", "to", "of", "it", "for"}
+# Free models tried in order until one responds; openrouter/free is OpenRouter's random free-model router
+OPENROUTER_MODELS = ["dots-studio/dots-3-note-preview:free", "nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free"]
+NO_RESPONSE_MESSAGE = ("Ah, looks like my computer isn't connecting to the server right now. Not super! "
+                       "Send me an email and try again after COB. That's life!")
 
 
 class AgenticRAGService:
@@ -397,10 +401,10 @@ class AgenticRAGService:
     @staticmethod
     def _parse_openrouter_response(message):
         thinking_text = None
-        final_answer = message.content or ""
+        final_answer = (message.content or "").strip()
 
         if hasattr(message, "model_extra") and message.model_extra is not None:
-            thinking_text = message.model_extra.get("reasoning_content")
+            thinking_text = message.model_extra.get("reasoning_content") or message.model_extra.get("reasoning")
         if not thinking_text and final_answer:
             thinking_match = re.search(r'<think>(.*?)</think>', final_answer, re.DOTALL)
             if thinking_match:
@@ -408,26 +412,38 @@ class AgenticRAGService:
                 final_answer = re.sub(r'<think>.*?</think>', '', final_answer, flags=re.DOTALL).strip()
         return thinking_text, final_answer
 
+    async def _openrouter_completion(self, **kwargs):
+        for model in OPENROUTER_MODELS:
+            try:
+                response = await self.openrouter_client.chat.completions.create(model=model, **kwargs)
+            except openai.APIError as e:
+                print(f"Error: OpenRouter request to {model} failed: {e}\n")
+                continue
+            if response.choices:
+                return response
+            print(f"Error: OpenRouter returned no choices from {model}: {getattr(response, 'error', None)}\n")
+        return None
+
     async def _get_system_guardrail_response(self, system_prompt, message_history):
         if self.premium_agent:
             print("Sending prompt to system guardrail Agent (Claude)...\n")
-            response = await self.claude_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=2048,
-                system=system_prompt,
-                messages=message_history
-            )
+            try:
+                response = await self.claude_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=2048,
+                    system=system_prompt,
+                    messages=message_history
+                )
+            except anthropic.APIError as e:
+                print(f"Error: Claude request failed: {e}\n")
+                return None
             text_block = next((block for block in response.content if isinstance(block, TextBlock)), None)
             return text_block.text if text_block else None
         else:
             print("Sending prompt to system guardrail Agent (OpenRouter)...\n")
             prompt = [{"role": "system", "content": system_prompt}] + message_history
-            response = await self.openrouter_client.chat.completions.create(
-                model="nex-agi/nex-n2-pro:free",
-                max_tokens=2048,
-                messages=prompt
-            )
-            if response.choices:
+            response = await self._openrouter_completion(max_tokens=2048, messages=prompt)
+            if response:
                 _, final_response = self._parse_openrouter_response(response.choices[0].message)
                 return final_response
             return None
@@ -437,13 +453,18 @@ class AgenticRAGService:
 
         if self.premium_agent:
             print("Sending prompt to FRC programming expert Agent (Claude)...\n")
-            response = await self.claude_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=2048,
-                tools=self.claude_tool_schema,
-                system=system_prompt,
-                messages=message_history
-            )
+            try:
+                response = await self.claude_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=2048,
+                    tools=self.claude_tool_schema,
+                    system=system_prompt,
+                    messages=message_history
+                )
+            except anthropic.APIError as e:
+                print(f"Error: Claude request failed: {e}\n")
+                response_dict["stop_reason"] = "no_response"
+                return response_dict
 
             response_dict["stop_reason"] = response.stop_reason
             if response_dict["stop_reason"] == "end_turn":
@@ -523,14 +544,13 @@ class AgenticRAGService:
         else:
             prompt = [{"role": "system", "content": system_prompt}] + message_history
             print("Sending prompt to FRC programming expert Agent (OpenRouter)...\n")
-            response = await self.openrouter_client.chat.completions.create(
-                model="nex-agi/nex-n2-pro:free",
+            response = await self._openrouter_completion(
                 max_tokens=2048,
                 tools=self.openrouter_tool_schema,
                 messages=prompt
             )
 
-            if not response.choices:
+            if not response:
                 response_dict["stop_reason"] = "no_response"
                 return response_dict
             response_dict["stop_reason"] = response.choices[0].finish_reason
@@ -775,7 +795,7 @@ CRITICAL:
             else:
                 return output_code, 'GOOD', convo_param
         else:
-            return None, "Query error. Please try again later."
+            return None, "NO_RESPONSE", NO_RESPONSE_MESSAGE
 
     async def run_agentic_query(self, message_history):
         system_prompt = ("""You are Mr. Christopher Woodard, an expert FRC programmer.
@@ -813,6 +833,8 @@ AutoManager, Pathfinder, RobotStates, Robot.
                 return response["content"]
             elif response.get("stop_reason") and response["stop_reason"] == "tool_use":
                 message_history = await self._update_with_tool_results(message_history, response["tool_results"])
+            elif response.get("stop_reason") == "no_response":
+                return NO_RESPONSE_MESSAGE
             else:
                 print(f"Error: Unexpected response format, with stop reason {response.get("stop_reason")}.\n")
                 return "Something went wrong. Please try again later."
